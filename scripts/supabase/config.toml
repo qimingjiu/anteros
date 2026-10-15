@@ -1,0 +1,4 @@
+# X-Device-Token is checked by our handler and bound to one owner/device in SQL.
+# MacroDroid must never hold a server secret.
+[functions.phone-presence]
+verify_jwt = false

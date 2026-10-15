@@ -1,0 +1,271 @@
+# QQ 群聊机器人配置示例
+# 复制为 config.yaml 后修改。令牌类配置用 *_env 指向环境变量，不写入本文件。
+
+timezone: Asia/Shanghai
+
+# 人设（可选）：prompt 非空时替换默认身份，name 用于让模型知道被 @ 的名字
+# 正文较长时可放进单独文件：persona.file: persona.md（格式参考 persona.example.md，该文件请自行创建并保密）
+persona:
+  name: "" # 例如：小雪
+  prompt: "" # 例如：你是小雪，一个毒舌但靠谱的群友，喜欢用颜文字，回答简短。
+
+database:
+  path: data/bot.db
+
+gateway:
+  # 目前实现 onebot（OneBot v11 正向 WebSocket，适配 SnowLuma / NapCat / LLOneBot 等）
+  provider: onebot
+  account_id: default # 本机器人账号的逻辑名，用于数据隔离
+  onebot:
+    endpoint: ws://127.0.0.1:3001
+    token_env: ONEBOT_TOKEN # 协议端配置的 access token；留空表示不鉴权
+    access_token: "" # 直接写入 token（不推荐，优先用 token_env）
+    reconnect_base_ms: 1000 # 重连退避起始
+    reconnect_max_ms: 60000 # 重连退避上限（自动加随机抖动）
+    heartbeat_timeout_factor: 2.5 # 超过心跳间隔的多少倍判定断开
+    request_timeout_ms: 20000
+    private_file_action: upload_private_file # 私聊文件动作名（扩展 API）
+    group_file_action: upload_group_file # 群文件动作名（扩展 API）
+    history_action: get_group_msg_history # 群历史动作名（扩展 API）
+    backfill_max_pages: 5 # 重连后历史补取最大页数（0 = 关闭）
+    backfill_page_limit: 100
+
+groups:
+  allowlist: [] # 启用的群号列表；空列表 = 不启用任何群
+  reply_mode: mention_or_reply # 显式触发路径；普通群消息由当前主模型自行决定
+  link_preview: false # 链接是否读取、如何回应由主模型决定
+  link_preview_cooldown_minutes: 120 # 同一链接同群的冷却时间
+  max_reply_chars: 1200 # 单条回复上限，超长自动分段
+  conversation:
+    enabled: true # 同一主模型决定回复、静默及当前攻击者拉黑
+    owner_aliases: [] # 主人完整名字/昵称；别人 @主人或提及主人可自动插话，仍受环境冷却/配额
+    wake_aliases: [] # 通用机器人别名，任何发送者可召唤；persona.name 始终保留
+    owner_wake_aliases: [] # 专属别名绑定平台发送者 QQ，命中时优先于通用别名
+    # - user_id: "123456789"
+    #   aliases: ["昵称甲", "昵称乙"]
+    observer_cooldown_ms: 30000 # 环境自动插话冷却半分钟（含别人提及主人）；机器人召唤始终绕过
+    observer_window_ms: 600000
+    observer_max_replies: 3 # 普通自动插话十分钟最多三次；召唤与明确追问绕过冷却、不占额度
+    repeat_window_ms: 900000 # 十五分钟内重复/高度相似自动回答抑制
+    owner_mention_repeat_ms: 45000 # 环境中同一人重复提及主人先去重，再检查环境冷却/配额
+
+model:
+  # openai_compatible：任意 OpenAI /chat/completions 兼容服务
+  # mock：开发联调用，回显固定内容，不联网
+  provider: openai_compatible
+  base_url: https://api.example.com/v1
+  api_key_env: LLM_API_KEY
+  api_key: ""
+  model: your-model-name
+  fallback_model: "" # 主模型失败时按顺序尝试
+  summary_model: "" # 日报/记忆摘要模型；留空用主模型
+  temperature: 0.7
+  max_context_chars: 6000 # 装配进提示词的近期上下文预算
+  max_output_chars: 2000
+  request_timeout_ms: 60000
+  # 管理员私聊“换模型”：先选服务商，再选模型；重启保持选择。
+  profiles: [] # 兼容原先手动配置的模型档位
+  providers: [] # 启动时拉取服务商模型目录
+  # - name: example
+  #   base_url: https://api.example.com/v1
+  #   api_key_env: EXAMPLE_API_KEY
+  #   models: [model-a, vendor/model-b]  # 只显示白名单；[] 导入全部对话模型
+  #   models_url: https://api.example.com/v1/models  # 可省略
+  #   model_prefixes: [model-preview]   # 仅在匹配唯一完整 ID 时加入
+
+memory:
+  enabled: true
+  raw_retention_days: 30 # 原始消息保留天数（0 = 永久）
+  isolate_by_group: true # 按 (账号, 群) 隔离记忆
+  topic_gap_minutes: 30 # 消息间隔超过该分钟数即切分话题
+  extraction: llm # llm | rules | off  话题结束时如何提取事实
+  max_facts_per_topic: 6
+
+reports:
+  enabled: false
+  schedule: "30 23 * * *" # 分 时 日 月 星期（机器人时区）
+  period: today_until_run # today_until_run | full_day（full_day 建议次日跑）
+  output_dir: data/reports
+  recipient_ids: [] # 私聊收件人 QQ 号；空 = 只生成文件不发送
+  max_delivery_attempts: 5
+  groups: [] # 生成日报的群；空 = 所有 allowlist 群
+
+documents:
+  enabled: true # 工具全局开启时，仅 tools.owner_ids 可生成与投递
+  output_dir: data/documents
+  provider_output_dir: "" # 协议容器内同一目录的路径；本机运行无需填写
+  # Docker SnowLuma 已挂 /opt/snowluma-docker/data -> /app/data 时可用：
+  # output_dir: /opt/snowluma-docker/data/qq-bot-documents
+  # provider_output_dir: /app/data/qq-bot-documents
+  max_input_chars: 100000
+  max_file_bytes: 10485760 # 单份文件 10 MiB
+  max_retained_files: 100
+  retention_hours: 72 # 下次生成时清理过期产物；不淘汰未过期文件
+
+tools:
+  enabled: true
+  search:
+    provider: none # none | searxng | tavily | exa | google_cse
+    tavily_api_key_env: TAVILY_API_KEY
+    exa_api_key_env: EXA_API_KEY
+    searxng_url: "" # 自建时 http://127.0.0.1:8888，仅接受本机服务
+    fallback_providers: [] # 显式设置 [tavily, exa]；每次搜索至多请求一个备用
+    min_results_before_fallback: 2
+    cache_ttl_ms: 900000
+    google_cse:
+      api_key_env: GOOGLE_CSE_API_KEY
+      cx: ""
+    max_results: 5
+    timeout_ms: 15000
+  reader:
+    enabled: true
+    timeout_ms: 15000
+    max_bytes: 2000000
+    max_chars: 8000
+    extractor_url: "" # 自建时 http://127.0.0.1:8787
+    crawl4ai_url: "" # 同上；严格同源、robots、隔离出网
+    firecrawl_api_key_env: FIRECRAWL_API_KEY # 只读6小时内远端缓存，绝不新抓源站
+    cache_ttl_ms: 21600000
+  research:
+    free_only: true
+    budget:
+      max_queries: 3
+      max_search_requests: 3 # 含备用/重试，跨工具轮共用
+      max_pages: 6
+      max_browser_renders: 2
+      max_cloud_extractions: 2
+      max_http_requests: 24 # 包含预留的浏览器子请求
+      max_output_chars: 48000
+      total_timeout_ms: 45000
+    quotas:
+      # 本地保守预留，不是远端账户余额；Exa单位USD
+      tavily: { daily: 20, monthly: 600 }
+      firecrawl: { daily: 30, monthly: 800 }
+      exa: { daily: 0.15, monthly: 4 }
+    blocked_domains: [] # 已知站点条款不允许时加入此列表，覆盖所有读取路径
+  browser_concurrency: 1
+  owner_ids: [] # 完整 MCP 工具所有者 QQ；群聊/私聊一致。省略时兼容 admins
+  minimax:
+    enabled: false # 图片/固定英文男声语音生成并投递QQ；需已连接官方MiniMax MCP
+  muninn:
+    enabled: false # 衔枝记忆MCP适配；真实账号/会话/主人固定命名空间，原始工具不直接开放
+  feishu:
+    enabled: false # 通过feishu_tools发现目录、feishu_call按需调用，避免一次暴露数百工具
+  email:
+    enabled: false # 独立SMTP/IMAP邮箱；固定EMAIL_*私密环境变量，不依赖飞书邮箱授权
+  mcp:
+    enabled: false
+    connect_timeout_ms: 15000
+    call_timeout_ms: 120000
+    servers: []
+    # - name: didi
+    #   transport: http
+    #   url_env: DIDI_MCP_URL   # 带凭据的地址放 .env
+    # - name: music
+    #   transport: stdio
+    #   command: node
+    #   args: [node_modules/tsx/dist/cli.mjs, src/tools/music-server.ts]
+    # - name: minimax
+    #   transport: stdio
+    #   command: /opt/qq-group-bot-mcp/minimax/venv/bin/minimax-mcp
+    #   allow_tools: [list_voices, text_to_audio, text_to_image]
+    #   # tools.minimax.enabled 开启受限生成；原始生成接口不直接暴露模型
+    #   # MINIMAX_API_KEY / MINIMAX_API_HOST 放 .env；Host不带/v1，生成消耗已购套餐或积分
+    # - name: muninn
+    #   transport: http
+    #   url_env: MUNINN_MCP_URL
+    #   headers_env: { Authorization: MUNINN_MCP_AUTHORIZATION }
+    #   allow_tools: [memory_context, memory_ingest, memory_list_claims, memory_correct_fragment, memory_contest_claim]
+    # - name: feishu
+    #   transport: stdio
+    #   command: node
+    #   args: [--env-file=/opt/qq-group-bot-mcp/feishu/.env, /opt/qq-group-bot-mcp/feishu/run.mjs]
+    # - name: filesystem
+    #   transport: stdio
+    #   command: npx
+    #   args: ["-y", "@modelcontextprotocol/server-filesystem", "C:/data"]
+    # - name: remote
+    #   transport: http
+    #   url: https://example.com/mcp
+    #   headers: { X-Client: "qq-group-bot" } # 普通非敏感请求头
+    #   headers_env: { Authorization: REMOTE_MCP_AUTHORIZATION }
+    #   # .env 中保存完整请求头值：REMOTE_MCP_AUTHORIZATION="Bearer ..."
+    #   # headers_env 覆盖 headers 中同名请求头（大小写不敏感）；环境变量未设置时拒绝启动
+    # - name: my-coffee
+    #   transport: http
+    #   url: https://gwmcp.lkcoffee.com/order/user/mcp
+    #   headers_env: { Authorization: LUCKIN_MCP_AUTHORIZATION }
+    # - name: mcd-mcp
+    #   transport: http
+    #   url: https://mcp.mcd.cn
+    #   headers_env: { Authorization: MCD_MCP_AUTHORIZATION }
+
+web:
+  enabled: true
+  host: 127.0.0.1
+  port: 8642
+  token: "" # 非空时 API 写操作需要 ?token= 或 Authorization
+
+admins: [] # 管理员 QQ 号（如 [10000, 10001]）
+
+logging:
+  level: info # debug | info | warn | error
+  dir: data/logs
+
+# Open-Meteo个人天气查询，无需密钥。中国15分钟降水为小时插值。
+weather:
+  enabled: false
+  default_location: 长沙市
+  # 可固定经纬度，避免每次地名搜索；以下为湖南省长沙市。
+  latitude: 28.19874
+  longitude: 112.97087
+  timezone: Asia/Shanghai
+  request_timeout_ms: 15000
+  cache_ttl_ms: 600000
+
+# 必须明确启用，收件人必须是tools.owner_ids或兼容的管理员。
+proactive:
+  enabled: false
+  recipient_id: ""
+  # group_id: ""              # 配置白名单群后，随机消息私聊/群聊轮换，群里只@主人
+  random_enabled: true
+  morning_enabled: true
+  morning_time: "07:00" # 每日固定私聊；停机后最多补发两小时内的当日播报
+  active_start: "08:00" # 随机消息和天气风险提醒的开放时间
+  active_end: "23:00" # 相同起止时间代表全天开放
+  include_draw: false # 兼容旧配置；日常主动消息不展示内部抽签、比赛和权重
+  weather_alerts_enabled: true
+  weather_check_minutes: 15
+  weather_alert_cooldown_minutes: 120
+  cooling_threshold_c: 5
+  max_message_chars: 800
+  morning_mode: clock
+
+# MacroDroid latest state or an existing EventTap device_events table, read by the server.
+# Optional: owner chats; group access requires an explicit subset of groups.allowlist.
+presence:
+  enabled: false
+  allowed_group_ids: [] # owner's messages in these groups may receive temporary phone context
+  source: phone_presence_state # device_events for an existing EventTap Android app
+  source_owner: "" # EventTap OWNER label, e.g. azhan; distinct from the owner's QQ
+  supabase_url_env: SUPABASE_URL
+  server_key_env: SUPABASE_SERVER_KEY # sb_secret_* or legacy service_role; never put it on the phone
+  owner_id: "" # explicit tools.owner_ids QQ
+  device_id: "my-phone"
+  request_timeout_ms: 1500
+  cache_ttl_ms: 30000
+  stale_retention_ms: 86400000 # past each field TTL: labeled historical; after 24h: omitted
+
+# Dedicated notebook only. Credentials remain in the environment, never in prompts.
+notion:
+  enabled: false
+  api_key_env: NOTION_API_KEY
+  root_page_id: ""
+  request_timeout_ms: 10000
+  reminders_enabled: true # durable QQ reminders; a Notion date alone is not a scheduled notification
+features:
+  tasks: true
+  personal_memory: true
+  group_search: true
+  link_dedup: true
+  incoming_files: true

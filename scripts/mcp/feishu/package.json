@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@larksuiteoapi/lark-mcp": "0.5.1"
+  }
+}

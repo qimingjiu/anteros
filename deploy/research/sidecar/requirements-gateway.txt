@@ -1,0 +1,2 @@
+aiohttp==3.14.5
+protego==0.7.0

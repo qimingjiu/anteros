@@ -1,0 +1,13 @@
+* text=auto
+
+# 脚本与容器文件必须 LF：CRLF 会让 Linux 上的 bash 和 Docker 构建失败
+*.sh    text eol=lf
+*.py    text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+Dockerfile text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+
+# 二进制
+*.otf   binary
