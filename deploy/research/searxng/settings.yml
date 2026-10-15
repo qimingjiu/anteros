@@ -1,0 +1,53 @@
+use_default_settings:
+  engines:
+    keep_only:
+      - mwmbl
+      - wikipedia
+      - arxiv
+
+general:
+  debug: false
+  instance_name: "Korax private research"
+
+server:
+  bind_address: "0.0.0.0"
+  port: 8080
+  secret_key: "set-only-via-SEARXNG_SECRET"
+  # This API is published only on host loopback and is budgeted by the QQ runtime.
+  # Disable our own interactive-browser bot detection, without changing upstream engines.
+  limiter: false
+  image_proxy: false
+  public_instance: false
+
+search:
+  safe_search: 1
+  autocomplete: ""
+  favicon_resolver: ""
+  formats: [json]
+  max_page: 1
+
+valkey:
+  url: "valkey://valkey:6379/0"
+
+outgoing:
+  request_timeout: 5.0
+  max_request_timeout: 8.0
+  pool_connections: 8
+  pool_maxsize: 8
+  enable_http2: true
+  retries: 0
+  # Engine endpoints are fixed in SearXNG, never taken from a result URL.
+
+engines:
+  - name: mwmbl
+    disabled: false
+    timeout: 5.0
+  - name: wikipedia
+    disabled: false
+    timeout: 5.0
+  - name: arxiv
+    disabled: false
+    timeout: 5.0
+
+# Broad HTML search engines are intentionally excluded. Public, unauthenticated APIs
+# are the initial source set; a blocked engine is suspended, never sent through a proxy.

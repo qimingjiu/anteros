@@ -1,0 +1,2093 @@
+[
+  {
+    "name": "bitable_v1_app_copy",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_app_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appDashboard_copy",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appDashboard_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_app_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_appRole_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appRole_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "bitable_v1_appRole_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_appRoleMember_batchCreate",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appRoleMember_batchDelete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appRoleMember_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appRoleMember_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "bitable_v1_appRoleMember_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_appRole_update",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "bitable_v1_appTable_batchCreate",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appTable_batchDelete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appTable_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appTable_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "bitable_v1_appTableField_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appTableField_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "bitable_v1_appTableField_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_appTableField_update",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "bitable_v1_appTableFormField_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_appTableFormField_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "bitable_v1_appTableForm_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_appTableForm_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "bitable_v1_appTable_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_appTable_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "bitable_v1_appTableRecord_batchCreate",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appTableRecord_batchDelete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appTableRecord_batchGet",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appTableRecord_batchUpdate",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appTableRecord_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appTableRecord_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "bitable_v1_appTableRecord_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_appTableRecord_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_appTableRecord_search",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appTableRecord_update",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "bitable_v1_appTableView_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "bitable_v1_appTableView_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "bitable_v1_appTableView_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_appTableView_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_appTableView_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "bitable_v1_app_update",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "bitable_v1_appWorkflow_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "bitable_v1_appWorkflow_update",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "calendar_v4_calendarAcl_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendarAcl_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "calendar_v4_calendarAcl_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "calendar_v4_calendarAcl_subscription",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendarAcl_unsubscription",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendar_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendar_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "calendar_v4_calendarEventAttendee_batchDelete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendarEventAttendeeChatMember_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "calendar_v4_calendarEventAttendee_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendarEventAttendee_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "calendar_v4_calendarEvent_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendarEvent_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "calendar_v4_calendarEvent_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "calendar_v4_calendarEvent_instanceView",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "calendar_v4_calendarEvent_instances",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "calendar_v4_calendarEvent_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "calendar_v4_calendarEventMeetingChat_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendarEventMeetingChat_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "calendar_v4_calendarEventMeetingMinute_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendarEvent_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "calendar_v4_calendarEvent_reply",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendarEvent_search",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendarEvent_subscription",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendarEvent_unsubscription",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendar_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "calendar_v4_calendar_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "calendar_v4_calendar_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "calendar_v4_calendar_primary",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendar_search",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendar_subscribe",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendar_subscription",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendar_unsubscribe",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_calendar_unsubscription",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_exchangeBinding_create",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_exchangeBinding_delete",
+    "tokens": [
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "calendar_v4_exchangeBinding_get",
+    "tokens": [
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "calendar_v4_freebusy_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_setting_generateCaldavConf",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_timeoffEvent_create",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "calendar_v4_timeoffEvent_delete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "docx_v1_chatAnnouncementBlock_batchUpdate",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "docx_v1_chatAnnouncementBlockChildren_batchDelete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "docx_v1_chatAnnouncementBlockChildren_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "docx_v1_chatAnnouncementBlockChildren_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "docx_v1_chatAnnouncementBlock_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "docx_v1_chatAnnouncementBlock_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "docx_v1_chatAnnouncement_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "docx_v1_documentBlock_batchUpdate",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "docx_v1_documentBlockChildren_batchDelete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "docx_v1_documentBlockChildren_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "docx_v1_documentBlockChildren_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "docx_v1_documentBlockDescendant_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "docx_v1_documentBlock_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "docx_v1_documentBlock_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "docx_v1_documentBlock_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "docx_v1_document_convert",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "docx_v1_document_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "docx_v1_document_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "docx_v1_document_rawContent",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_exportTask_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_exportTask_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_fileComment_batchQuery",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_fileComment_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_fileComment_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_fileComment_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_fileComment_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "drive_v1_fileCommentReply_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "drive_v1_fileCommentReply_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_fileCommentReply_update",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "drive_v1_file_copy",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_file_createFolder",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_file_createShortcut",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_file_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "drive_v1_file_deleteSubscribe",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "drive_v1_file_getSubscribe",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_file_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_file_move",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_fileStatistics_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_file_subscribe",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_fileSubscription_create",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_fileSubscription_get",
+    "tokens": [
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_fileSubscription_patch",
+    "tokens": [
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "drive_v1_file_taskCheck",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_file_uploadFinish",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_file_uploadPrepare",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_fileVersion_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_fileVersion_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "drive_v1_fileVersion_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_fileVersion_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_fileViewRecord_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_importTask_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_importTask_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_media_batchGetTmpDownloadUrl",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_media_uploadFinish",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_media_uploadPrepare",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_meta_batchQuery",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_permissionMember_auth",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_permissionMember_batchCreate",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_permissionMember_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_permissionMember_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "drive_v1_permissionMember_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_permissionMember_transferOwner",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_permissionMember_update",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "drive_v1_permissionPublic_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v1_permissionPublicPassword_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "drive_v1_permissionPublicPassword_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "drive_v1_permissionPublicPassword_update",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "drive_v1_permissionPublic_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "drive_v2_fileLike_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v2_permissionPublic_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "drive_v2_permissionPublic_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "mail_v1_mailgroupAlias_create",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_mailgroupAlias_delete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_mailgroupAlias_list",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_mailgroup_create",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_mailgroup_delete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_mailgroup_get",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_mailgroup_list",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_mailgroupManager_batchCreate",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_mailgroupManager_batchDelete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_mailgroupManager_list",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_mailgroupMember_batchCreate",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_mailgroupMember_batchDelete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_mailgroupMember_create",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_mailgroupMember_delete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_mailgroupMember_get",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_mailgroupMember_list",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_mailgroup_patch",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "mail_v1_mailgroupPermissionMember_batchCreate",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_mailgroupPermissionMember_batchDelete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_mailgroupPermissionMember_create",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_mailgroupPermissionMember_delete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_mailgroupPermissionMember_get",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_mailgroupPermissionMember_list",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_mailgroup_update",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "mail_v1_publicMailboxAlias_create",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_publicMailboxAlias_delete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_publicMailboxAlias_list",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_publicMailbox_create",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_publicMailbox_delete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_publicMailbox_get",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_publicMailbox_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_publicMailboxMember_batchCreate",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_publicMailboxMember_batchDelete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_publicMailboxMember_clear",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_publicMailboxMember_create",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_publicMailboxMember_delete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_publicMailboxMember_get",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_publicMailboxMember_list",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_publicMailbox_patch",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "mail_v1_publicMailbox_removeToRecycleBin",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_publicMailbox_update",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "mail_v1_userMailboxAlias_create",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_userMailboxAlias_delete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_userMailboxAlias_list",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_userMailbox_delete",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_userMailboxEvent_subscribe",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_userMailboxEvent_subscription",
+    "tokens": [
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_userMailboxEvent_unsubscribe",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_userMailboxFolder_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_userMailboxFolder_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_userMailboxFolder_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_userMailboxFolder_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "mail_v1_userMailboxMailContact_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_userMailboxMailContact_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_userMailboxMailContact_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_userMailboxMailContact_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "mail_v1_userMailboxMessageAttachment_downloadUrl",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_userMailboxMessage_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_userMailboxMessage_getByCard",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_userMailboxMessage_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_userMailboxMessage_send",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_userMailboxRule_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_userMailboxRule_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "mail_v1_userMailboxRule_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "mail_v1_userMailboxRule_reorder",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "mail_v1_userMailboxRule_update",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "mail_v1_user_query",
+    "tokens": [
+      "tenant"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "sheets_v3_spreadsheet_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "sheets_v3_spreadsheet_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "sheets_v3_spreadsheet_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilterViewCondition_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilterViewCondition_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilterViewCondition_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilterViewCondition_query",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilterViewCondition_update",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilterView_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilterView_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilterView_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilterView_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilterView_query",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilter_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilter_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilter_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFilter_update",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheet_find",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFloatImage_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFloatImage_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFloatImage_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFloatImage_patch",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PATCH"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheetFloatImage_query",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheet_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheet_moveDimension",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheet_query",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "sheets_v3_spreadsheetSheet_replace",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "wiki_v1_node_search",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "wiki_v2_space_create",
+    "tokens": [
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "wiki_v2_space_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "wiki_v2_space_getNode",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "wiki_v2_space_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "wiki_v2_spaceMember_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "wiki_v2_spaceMember_delete",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "DELETE"
+  },
+  {
+    "name": "wiki_v2_spaceMember_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "wiki_v2_spaceNode_copy",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "wiki_v2_spaceNode_create",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "wiki_v2_spaceNode_list",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "wiki_v2_spaceNode_move",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "wiki_v2_spaceNode_moveDocsToWiki",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "wiki_v2_spaceNode_updateTitle",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "POST"
+  },
+  {
+    "name": "wiki_v2_spaceSetting_update",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "PUT"
+  },
+  {
+    "name": "wiki_v2_task_get",
+    "tokens": [
+      "tenant",
+      "user"
+    ],
+    "method": "GET"
+  },
+  {
+    "name": "docx_builtin_search",
+    "tokens": [
+      "user"
+    ]
+  },
+  {
+    "name": "docx_builtin_import",
+    "tokens": [
+      "user",
+      "tenant"
+    ]
+  }
+]

@@ -1,0 +1,61 @@
+# 模拟联调配置（配合 npm run sim 使用，不需要真实 QQ 和模型服务）
+
+timezone: Asia/Shanghai
+
+database:
+  path: data-sim/bot.db
+
+gateway:
+  provider: onebot
+  account_id: sim
+  onebot:
+    endpoint: ws://127.0.0.1:3001/ws
+    token_env: ""
+    reconnect_base_ms: 500
+    reconnect_max_ms: 5000
+
+groups:
+  allowlist: ["123456"]
+  reply_mode: mention_or_reply
+  link_preview: true
+  link_preview_cooldown_minutes: 1
+
+model:
+  provider: openai_compatible
+  base_url: http://127.0.0.1:3003/v1
+  api_key: ""
+  model: sim-model
+  temperature: 0.7
+
+memory:
+  enabled: true
+  raw_retention_days: 30
+  topic_gap_minutes: 1
+  extraction: rules
+
+reports:
+  enabled: true
+  schedule: "30 23 * * *"
+  period: today_until_run
+  output_dir: data-sim/reports
+  recipient_ids: ["8888"]
+  max_delivery_attempts: 3
+
+tools:
+  enabled: true
+  reader:
+    enabled: true
+    timeout_ms: 5000
+  search:
+    provider: none
+
+web:
+  enabled: true
+  host: 127.0.0.1
+  port: 8642
+
+admins: ["8888"]
+
+logging:
+  level: debug
+  dir: data-sim/logs
