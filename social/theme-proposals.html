@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>棕榈杖 Anteros · 新主题样张</title>
+<style>
+@font-face{font-family:AnterosSerif;src:url('theme-assets/serif-bold.woff2') format('woff2');font-weight:700 900;font-display:block}
+@font-face{font-family:AnterosSerif;src:url('theme-assets/serif-regular.woff2') format('woff2');font-weight:400 600;font-display:block}
+@font-face{font-family:AnterosLatin;src:url('theme-assets/latin.woff2') format('woff2');font-weight:500 800;font-display:block}
+@font-face{font-family:AnterosLatin;src:url('theme-assets/latin-italic.woff2') format('woff2');font-weight:400 700;font-style:italic;font-display:block}
+:root{--paper:#fff4df;--red:#ef392b;--ink:#361912;--peach:#ffd5b8;--green:#086849;--yellow:#f5d933;--blue:#184bdf;--sun:#ffb92c}
+*{box-sizing:border-box}body{margin:0;background:#f3eee5;color:var(--ink);font-family:AnterosSerif,'Songti SC',serif}button,a{-webkit-tap-highlight-color:transparent}button{font:inherit}a{color:inherit}
+.proposal-head{max-width:1520px;margin:0 auto;padding:45px 28px 32px}.proposal-head small{font:12px/1.5 Consolas,monospace;letter-spacing:2px;color:#9d3228}.proposal-head h1{font-size:clamp(28px,4vw,46px);letter-spacing:-1px;margin:12px 0}.proposal-head p{font-family:'Microsoft YaHei',sans-serif;font-size:14px;line-height:1.9;max-width:760px;margin:0;color:#6b5145}.jump-links{display:flex;gap:10px;flex-wrap:wrap;margin-top:21px}.jump-links a{font-family:'Microsoft YaHei',sans-serif;font-size:13px;line-height:1.5;text-decoration:none;border-bottom:1px solid currentColor;padding:4px 0;margin-right:16px}.jump-links a:hover{color:var(--red)}
+.gallery{max-width:1520px;margin:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px 28px;padding:0 28px 48px}.sample{min-width:0;scroll-margin-top:20px}.sample-label{display:flex;justify-content:space-between;align-items:baseline;padding:0 0 12px;gap:15px}.sample-label h2{font-size:20px;margin:0}.sample-label small{font:11px/1.6 Consolas,monospace;letter-spacing:1px}.sample-note{font:13px/1.8 'Microsoft YaHei',sans-serif;margin:12px 0 0;color:#6b5145}.palette{display:inline-flex;gap:4px;margin-right:8px;vertical-align:-1px}.palette i{width:12px;height:12px;display:inline-block;background:var(--c)}
+.card{position:relative;width:100%;overflow:hidden}.card-inner{position:relative;width:1080px;height:1440px;overflow:hidden;transform-origin:top left;background:var(--paper);isolation:isolate}
+.card-inner::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:9;opacity:.025;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath filter='url(%23n)' opacity='.7' d='M0 0h180v180H0z'/%3E%3C/svg%3E")}
+.small{font:20px/1.6 Consolas,'Microsoft YaHei',sans-serif;letter-spacing:1.8px}.latin{font-family:AnterosLatin,Georgia,serif}.kicker{font:20px/1.5 'Microsoft YaHei',sans-serif;letter-spacing:4px}.foot{position:absolute;bottom:55px;left:64px;right:64px;display:flex;justify-content:space-between;align-items:end;font:18px/1.65 Consolas,'Microsoft YaHei',sans-serif;letter-spacing:1px;z-index:4}.palm-print{position:absolute;mask:url('theme-assets/palm.png') center/contain no-repeat;-webkit-mask:url('theme-assets/palm.png') center/contain no-repeat;pointer-events:none}
+/* A — 朱砂回信。标题像写在信封上的收件人，棕榈是一张整版套色木刻。 */
+.vermilion{color:var(--ink);background:var(--paper)}
+.a-field{position:absolute;top:0;right:0;width:630px;height:1038px;background:var(--red);border-bottom-left-radius:260px 190px}
+.a-mast{position:absolute;left:65px;top:53px;right:65px;display:flex;justify-content:space-between;align-items:center;z-index:3}.a-mast .latin{font-size:36px;letter-spacing:4px}.a-mast .small{color:var(--paper);font-size:17px;letter-spacing:1px}
+.a-name{position:absolute;left:65px;top:188px;margin:0;font-size:153px;font-weight:900;line-height:1.15;letter-spacing:-7px;writing-mode:vertical-rl;z-index:3}
+.a-origin{position:absolute;top:220px;left:280px;writing-mode:vertical-rl;font-size:25px;line-height:1.7;letter-spacing:5px}
+.a-palm{width:780px;height:940px;right:-100px;top:106px;background:var(--paper);transform:rotate(12deg)}
+.a-english{position:absolute;top:174px;left:510px;color:var(--paper);font-size:59px;line-height:1.2;font-style:italic;transform:rotate(-6deg);z-index:2;white-space:nowrap}
+.a-reply{position:absolute;left:63px;top:948px;font-size:104px;line-height:1.18;letter-spacing:-5px;margin:0;z-index:3}.a-reply strong{color:var(--red);font-weight:900}.a-reply .second{padding-left:143px}
+.a-summary{position:absolute;left:68px;bottom:132px;font-size:27px;line-height:1.7;letter-spacing:1px}.a-summary b{color:var(--red);font-weight:700}.a-bottom-line{position:absolute;left:64px;right:64px;bottom:105px;height:1px;background:var(--red)}
+.a-seal{position:absolute;left:324px;top:659px;width:158px;height:158px;background:var(--peach);border-radius:50%;transform:rotate(-14deg);display:grid;place-content:center;text-align:center;color:var(--red);font-size:31px;line-height:1.3;letter-spacing:4px;z-index:4}.a-seal small{font:13px/1.7 Consolas,monospace;letter-spacing:1px;display:block;margin-top:8px}
+/* B — 盛夏群像。黄绿相撞，字排成一道可进入的门。 */
+.summer{background:var(--yellow);color:var(--green)}
+.b-mast{position:absolute;left:64px;right:64px;top:53px;display:flex;justify-content:space-between;align-items:baseline}.b-mast .latin{font-size:48px;letter-spacing:3px}.b-mast .small{font-size:18px}
+.b-rule{position:absolute;left:64px;right:64px;top:128px;height:2px;background:var(--green)}
+.b-head{position:absolute;left:62px;top:187px;margin:0;font-size:115px;line-height:1.28;letter-spacing:-4px;font-weight:900;z-index:3}.b-head em{font-style:normal;background:var(--green);color:var(--paper);padding:0 14px 7px 11px;display:inline-block;transform:rotate(-3deg);margin-left:9px}.b-head .indent{display:block;padding-left:193px}
+.b-window{position:absolute;left:372px;top:651px;width:580px;height:525px;background:var(--paper);border-radius:280px 280px 0 0;transform:rotate(7deg)}
+.b-palm{background:var(--green);left:272px;top:576px;width:885px;height:770px;transform:rotate(-20deg)}
+.b-side{position:absolute;left:68px;top:727px;writing-mode:vertical-rl;font-size:33px;line-height:1.7;letter-spacing:5px;z-index:3}.b-side span{color:#fff8e8;background:var(--green);padding:15px 8px;display:inline-block;margin-left:18px}
+.b-again{position:absolute;right:-12px;top:1122px;font-size:104px;line-height:1.08;letter-spacing:-3px;white-space:nowrap;transform:rotate(-5deg);z-index:3;background:var(--paper);padding:6px 37px 16px 26px}.b-again em{font-weight:600}
+.b-project{position:absolute;left:65px;bottom:165px;font-size:47px;font-weight:700;letter-spacing:4px;z-index:3}.summer .foot{border-top:1px solid var(--green);padding-top:20px;bottom:43px}
+/* C — 晴昼神话。钴蓝字和金色信号，叙事从一句召唤开始。 */
+.daylight{background:#fff8e8;color:var(--blue)}
+.c-band{position:absolute;left:0;top:0;bottom:0;width:87px;background:var(--blue)}.c-spine{position:absolute;left:29px;top:70px;writing-mode:vertical-rl;color:#fff8e8;font:20px/1.5 Consolas,monospace;letter-spacing:5px}
+.c-mast{position:absolute;left:135px;right:62px;top:54px;display:flex;justify-content:space-between;align-items:baseline}.c-mast .latin{font-size:43px;letter-spacing:4px}.c-mast .small{font-size:18px}
+.c-name{position:absolute;top:153px;left:130px;margin:0;font-size:146px;line-height:1.2;letter-spacing:8px;font-weight:900}
+.c-at{position:absolute;left:381px;top:354px;font:790px/1 Georgia,serif;letter-spacing:-70px;color:var(--sun);transform:rotate(-13deg)}
+.c-head{position:absolute;top:404px;left:131px;font-size:138px;line-height:1.34;letter-spacing:-4px;font-weight:900;margin:0;z-index:3}.c-head .indent{display:block;padding-left:174px}.c-head em{font-style:normal;display:block;padding-left:57px}
+.c-notation{position:absolute;left:143px;top:1066px;font-size:29px;line-height:1.8}.c-notation span{font-family:AnterosLatin,Georgia,serif;font-style:italic;font-size:42px;display:block;margin-bottom:10px}
+.c-palm{background:var(--blue);left:795px;top:1030px;width:230px;height:230px;transform:rotate(16deg)}
+.daylight .foot{left:141px;border-top:1px solid var(--blue);padding-top:22px;bottom:43px}
+/* A 的内页试排。用一段有来处的对话代替两大段功能说明。 */
+.memory{background:var(--paper);color:var(--ink)}
+.m-mast{position:absolute;top:53px;left:65px;right:65px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--red);padding-bottom:26px;color:var(--red)}.m-mast .latin{font-size:36px;letter-spacing:3px}.m-mast .small{font-size:18px}
+.m-index{position:absolute;left:65px;top:166px;font-size:25px;letter-spacing:3px;color:var(--red)}
+.m-head{position:absolute;left:60px;top:241px;margin:0;font-size:103px;line-height:1.35;letter-spacing:-4px;font-weight:900}.m-head strong{font-weight:900;color:var(--red)}
+.m-lead{position:absolute;left:68px;top:556px;font-size:29px;line-height:1.7;letter-spacing:1px}
+.m-demo{position:absolute;left:0;right:0;top:687px;height:389px;background:var(--peach)}
+.m-time{position:absolute;left:67px;top:28px;font:18px/1.5 Consolas,'Microsoft YaHei',sans-serif;letter-spacing:2px;color:#7a4737}.m-question{position:absolute;left:66px;right:150px;top:76px;background:var(--paper);padding:25px 34px;font-size:35px;line-height:1.55;transform:rotate(-2deg)}
+.m-answer{position:absolute;left:212px;right:0;top:190px;min-height:175px;background:var(--red);padding:24px 30px 28px 42px;color:var(--paper);transform:rotate(2deg);z-index:2}.m-answer small{display:block;font:17px/1.5 Consolas,'Microsoft YaHei',sans-serif;letter-spacing:2px;margin-bottom:12px}.m-answer p{margin:0;font-size:37px;line-height:1.5;letter-spacing:1px}.m-quote{position:absolute;left:64px;top:215px;font-size:130px;line-height:1;color:var(--red);font-family:AnterosLatin,Georgia,serif}
+.m-proof{position:absolute;top:1120px;left:65px;right:65px;display:grid;grid-template-columns:1.15fr 1.1fr 1fr;gap:32px}.m-proof div{padding-top:13px;border-top:1px solid var(--red)}.m-proof b{display:block;font-size:36px;color:var(--red);font-weight:700;margin-bottom:10px}.m-proof p{font-size:29px;line-height:1.6;margin:0;letter-spacing:0}.memory .foot{font-size:16px;bottom:45px;color:#754b3b}.m-mark{position:absolute;right:65px;top:168px;font:italic 36px/1 AnterosLatin,Georgia,serif;color:var(--red)}
+body.export{margin:0;width:1080px;height:1440px;background:var(--paper)}body.export .proposal-head,body.export .sample-label,body.export .sample-note{display:none}body.export .gallery{display:block;margin:0;padding:0;width:1080px;max-width:none}body.export .sample{display:none}body.export .sample.export-show{display:block}body.export .card{width:1080px;height:1440px!important}body.export .card-inner{transform:none!important}
+@media(max-width:750px){.gallery{grid-template-columns:minmax(0,1fr);padding:0 16px 30px;gap:30px}.proposal-head{padding:29px 18px 25px}.sample-label h2{font-size:18px}.sample-label small{font-size:10px}.sample-note{font-size:12px}}
+</style>
+</head>
+<body>
+<header class="proposal-head">
+  <small>ANTEROS / ART DIRECTION STUDIES</small>
+  <h1>让棕榈杖，先有自己的声调。</h1>
+  <p>三个鲜明的新主题；最后一张是「朱砂回信」的内容页试排。每张均为 1080 × 1440。先看颜色与字的关系，再看它怎样讲一个群里的故事。</p>
+  <nav class="jump-links" aria-label="样张导航"><a href="#vermilion">01 朱砂回信</a><a href="#summer">02 盛夏群像</a><a href="#daylight">03 晴昼神话</a><a href="#memory">04 内页试排</a></nav>
+</header>
+<main class="gallery">
+  <article class="sample" id="vermilion">
+    <div class="sample-label"><h2>01 · 朱砂回信</h2><small>RECOMMENDED / COVER</small></div>
+    <section class="card" data-card="1" aria-label="朱砂回信封面样张"><div class="card-inner vermilion">
+      <div class="a-field" aria-hidden="true"></div>
+      <div class="a-mast"><span class="latin">ANTEROS</span><span class="small">A REPLY, WITH LOVE.</span></div>
+      <h2 class="a-name">棕榈杖</h2>
+      <div class="a-origin">Ἀντέρως<br>被回应的爱</div>
+      <div class="palm-print a-palm" aria-hidden="true"></div>
+      <div class="a-english latin" aria-hidden="true">Love, returned.</div>
+      <div class="a-seal">见字<br>有回音<small>QQ GROUPMATE</small></div>
+      <p class="a-reply">叫一声，<br><span class="second">就有<strong>回音。</strong></span></p>
+      <div class="a-summary">一个住在 QQ 群里的 <b>AI 群友。</b><br>记得你说的，也接得住下一句。</div>
+      <div class="a-bottom-line" aria-hidden="true"></div>
+      <footer class="foot"><span>记忆 / 工具 / 日报</span><span>SELF-HOSTED · MIT</span></footer>
+    </div></section>
+    <p class="sample-note"><span class="palette"><i style="--c:#ef392b"></i><i style="--c:#fff4df"></i><i style="--c:#361912"></i><i style="--c:#ffd5b8"></i></span>朱红 × 奶油纸 × 墨棕。像一封终于收到回信的来信；大字、套色棕榈与错位落款。</p>
+  </article>
+  <article class="sample" id="summer">
+    <div class="sample-label"><h2>02 · 盛夏群像</h2><small>PALM CLUB / COVER</small></div>
+    <section class="card" data-card="2" aria-label="盛夏群像封面样张"><div class="card-inner summer">
+      <div class="b-mast"><span class="latin">Anteros</span><span class="small">QQ 群里的新住客</span></div><div class="b-rule" aria-hidden="true"></div>
+      <h2 class="b-head">群里，多了个<br><span class="indent"><em>记性很好</em></span>的家伙。</h2>
+      <div class="b-window" aria-hidden="true"></div><div class="palm-print b-palm" aria-hidden="true"></div>
+      <p class="b-side">聊过的、说好的，<br><span>下次还能接着聊。</span></p>
+      <div class="b-again latin" aria-hidden="true"><em>Hello, again.</em></div>
+      <div class="b-project">棕榈杖</div>
+      <footer class="foot"><span>记得住话，也接得上话。<br>一个常住群里的 AI 群友。</span><span>SELF-HOSTED<br>MIT OPEN SOURCE</span></footer>
+    </div></section>
+    <p class="sample-note"><span class="palette"><i style="--c:#f5d933"></i><i style="--c:#086849"></i><i style="--c:#fff4df"></i></span>明黄 × 棕榈绿。更明快、更有群聊的热闹劲；标题像招呼，棕榈像从纸外长进来。</p>
+  </article>
+  <article class="sample" id="daylight">
+    <div class="sample-label"><h2>03 · 晴昼神话</h2><small>THE CALL / COVER</small></div>
+    <section class="card" data-card="3" aria-label="晴昼神话封面样张"><div class="card-inner daylight">
+      <div class="c-band" aria-hidden="true"></div><div class="c-spine">ANTEROS / THE GOD OF LOVE RETURNED</div>
+      <div class="c-mast"><span class="latin">Ἀντέρως</span><span class="small">一个 QQ 群里的 AI 群友</span></div>
+      <h2 class="c-name">棕榈杖</h2><div class="c-at" aria-hidden="true">@</div>
+      <p class="c-head">你叫我，<br><span class="indent">我就</span><em>有回应。</em></p>
+      <div class="c-notation"><span class="latin">Call. Reply. Remember.</span>从一句 @ 开始，<br>把聊天，变成有来有回。</div>
+      <div class="palm-print c-palm" aria-hidden="true"></div>
+      <footer class="foot"><span>记忆 · 工具 · 日报</span><span>ANTEROS / MIT</span></footer>
+    </div></section>
+    <p class="sample-note"><span class="palette"><i style="--c:#184bdf"></i><i style="--c:#ffb92c"></i><i style="--c:#fff8e8"></i></span>钴蓝 × 日光金 × 象牙白。更像白昼里的希腊海报；把 @ 放大成召唤的信号。</p>
+  </article>
+  <article class="sample" id="memory">
+    <div class="sample-label"><h2>04 · 朱砂回信，内页试排</h2><small>LAYOUT PROOF / MEMORY</small></div>
+    <section class="card" data-card="4" aria-label="朱砂回信主题记忆内容页样张"><div class="card-inner memory">
+      <div class="m-mast"><span class="latin">ANTEROS</span><span class="small">棕榈杖 / 群聊记忆</span></div>
+      <div class="m-index">Αʹ / 有来处的记忆</div><div class="m-mark">Memory, with a source.</div>
+      <h2 class="m-head">你还记得<br><strong>我那天说的吗？</strong></h2>
+      <div class="m-lead">话题翻过去，约定还能找回来。<br>保留发言人与来源，查得到原话。</div>
+      <div class="m-demo">
+        <div class="m-time">对话示意 / 非真实截图</div>
+        <div class="m-question">“我上次说，周六几点见？”</div>
+        <div class="m-quote" aria-hidden="true">↳</div>
+        <div class="m-answer"><small>棕榈杖 / 引用此前消息</small><p>你说的是：周六，下午三点。</p></div>
+      </div>
+      <div class="m-proof"><div><b>有来处</b><p>保留发言人与来源，<br>检索能找到原消息。</p></div><div><b>能改口</b><p>候选、确认分开；<br>可修订，也可作废。</p></div><div><b>不串门</b><p>群与群分别保存，<br>私聊也单独记。</p></div></div>
+      <footer class="foot"><span>这一句，留给下一次对话。</span><span>01 / MEMORY</span></footer>
+    </div></section>
+    <p class="sample-note">从“大标题 + 两段说明”改成“提问 → 对话场景 → 三条证据”。让记忆出现在一次具体的回应里。</p>
+  </article>
+</main>
+<script>
+const wanted = new URLSearchParams(location.search).get('card');
+if(wanted !== null){
+  const selected=document.querySelector('.card[data-card="'+CSS.escape(wanted)+'"]');
+  if(selected){document.body.classList.add('export');selected.closest('.sample').classList.add('export-show')}
+}
+function fit(){
+  if(document.body.classList.contains('export'))return;
+  document.querySelectorAll('.card').forEach(card=>{const scale=Math.min(card.clientWidth/1080,1);card.style.height=(1440*scale)+'px';card.querySelector('.card-inner').style.transform='scale('+scale+')'})
+}
+addEventListener('resize',fit);document.fonts.ready.then(fit);fit();
+</script>
+</body>
+</html>

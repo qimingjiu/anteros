@@ -71,7 +71,7 @@ export class NotionReminderScheduler {
     this.checkTarget(scope.requesterId, scope.conversationType, scope.targetId);
     const row = this.deps.db.db.prepare("SELECT owner_id,conversation_type,target_id,entry,completed FROM notion_items WHERE page_id=?")
       .get(id) as { owner_id: string; conversation_type: string; target_id: string; entry: string; completed: number } | undefined;
-    if (!row || row.owner_id !== scope.requesterId || row.completed || (scope.conversationType === "group" && (row.conversation_type !== "group" || row.target_id !== scope.targetId))) throw new NotionError("forbidden");
+    if (!row || row.owner_id !== scope.requesterId || row.completed) throw new NotionError("forbidden");
     const entry = JSON.parse(row.entry) as { title: string; dueAt?: string; kind: string };
     if (!["todo", "reminder"].includes(entry.kind)) throw new NotionError("invalid_input");
     return entry;
@@ -79,7 +79,7 @@ export class NotionReminderScheduler {
   private scoped(id: string, scope: NotionScope): ReminderRow {
     this.checkTarget(scope.requesterId, scope.conversationType, scope.targetId);
     const row = this.row(id);
-    if (!row || row.requester_id !== scope.requesterId || (scope.conversationType === "group" && (row.conversation_type !== "group" || row.target_id !== scope.targetId))) throw new NotionError("not_found");
+    if (!row || row.requester_id !== scope.requesterId) throw new NotionError("not_found");
     return row;
   }
   private roomForReminder(): void {
@@ -107,8 +107,8 @@ export class NotionReminderScheduler {
     this.checkTarget(scope.requesterId, scope.conversationType, scope.targetId);
     if (!input || !["list", "repeat", "snooze", "skip_next", "cancel"].includes(input.action)) throw new NotionError("invalid_input");
     if (input.action === "list") {
-      const rows = this.deps.db.db.prepare(`SELECT * FROM notion_reminders WHERE account_id=? AND requester_id=? ${scope.conversationType === "group" ? "AND conversation_type='group' AND target_id=?" : ""} ORDER BY CASE status WHEN 'scheduled' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END,due_at LIMIT 100`)
-        .all(this.deps.accountId, scope.requesterId, ...(scope.conversationType === "group" ? [scope.targetId] : [])) as unknown as ReminderRow[];
+      const rows = this.deps.db.db.prepare(`SELECT * FROM notion_reminders WHERE account_id=? AND requester_id=? ORDER BY CASE status WHEN 'scheduled' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END,due_at LIMIT 100`)
+        .all(this.deps.accountId, scope.requesterId) as unknown as ReminderRow[];
       return { reminders: rows.map(row => this.receipt(row)), limit: 100 };
     }
     const id = notionId(input.entryId!);

@@ -9,6 +9,8 @@ export interface NotionSaveInput { kind: NotionKind; title: string; content: str
 export interface NotionEntry {
   id: string; url: string; kind: NotionKind; title: string; content: string; sourceUrl?: string;
   dueAt?: string; completed: boolean; createdAt: string;
+  /** 条目最初保存自哪里；仅展示用，不影响读取范围。 */
+  savedVia?: { conversationType: "private" | "group"; targetId: string };
 }
 export type NotionFailure = "not_configured" | "invalid_input" | "forbidden" | "not_found" | "rate_limited"
   | "timeout" | "unavailable" | "invalid_response" | "write_unknown" | "too_large";
@@ -184,17 +186,16 @@ export class NotionNotebook {
     const limit = Math.max(1, Math.min(30, Math.floor(filter.limit ?? 15)));
     if (!Number.isFinite(limit)) throw new NotionError("invalid_input");
     const params: (string | number)[] = [this.root, scope.requesterId];
-    const groupClause = scope.conversationType === "group" ? " AND conversation_type='group' AND target_id=?" : "";
-    if (scope.conversationType === "group") params.push(scope.targetId);
-    const rows = this.deps.db.db.prepare(`SELECT * FROM notion_items WHERE root_id=? AND owner_id=?${groupClause} ORDER BY created_at DESC LIMIT 500`).all(...params) as unknown as EntryRow[];
-    return rows.map(r => ({ ...JSON.parse(r.entry) as NotionEntry, completed: !!r.completed }))
+    // 笔记本不按会话隔离：主人本人在群里也能查到自己从私聊或其他群保存的条目。
+    const rows = this.deps.db.db.prepare(`SELECT * FROM notion_items WHERE root_id=? AND owner_id=? ORDER BY created_at DESC LIMIT 500`).all(...params) as unknown as EntryRow[];
+    return rows.map(r => ({ ...JSON.parse(r.entry) as NotionEntry, completed: !!r.completed, savedVia: { conversationType: r.conversation_type as "private" | "group", targetId: r.target_id } }))
       .filter(e => (!filter.kind || e.kind === filter.kind) && (!query || `${e.title}\n${e.content}\n${e.sourceUrl ?? ""}`.normalize("NFKC").toLocaleLowerCase().includes(query))).slice(0, limit);
   }
 
   private local(id: string, scope: NotionScope): NotionEntry {
     checkedScope(scope); const pageId = notionId(id);
     const row = this.deps.db.db.prepare("SELECT * FROM notion_items WHERE root_id=? AND page_id=? AND owner_id=?").get(this.root, pageId, scope.requesterId) as EntryRow | undefined;
-    if (!row || (scope.conversationType === "group" && (row.conversation_type !== "group" || row.target_id !== scope.targetId))) throw new NotionError("not_found");
+    if (!row) throw new NotionError("not_found");
     return { ...JSON.parse(row.entry) as NotionEntry, completed: !!row.completed };
   }
 
