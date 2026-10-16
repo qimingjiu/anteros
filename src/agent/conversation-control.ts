@@ -60,6 +60,17 @@ export function detectDirectAttack(text: string): DirectAttack | null {
   return null;
 }
 
+/**
+ * 弱模型偶尔把 conversation_action 写成正文而不是真正的工具调用。
+ * 检出完整独占正文的伪调用并转回控制通道；这类文本绝不能当群消息发出。
+ * 只匹配整条正文即调用本身，正文里提及或转述该语法不算。
+ */
+export function parsePseudoControlCall(content: string): ConversationAction | null {
+  const match = /^\s*conversation_action\s*\(\s*action\s*=\s*["'](silent|blacklist)["']\s*(?:,\s*reason\s*=\s*["']([^"']*)["']\s*)?\)\s*\.?\s*$/su.exec(content);
+  if (!match) return null;
+  return parseConversationAction({ action: match[1], reason: match[2] });
+}
+
 /** 平台 at 优先；名字使用配置的完整别名，拒绝单字和英文单词内部误命中。 */
 export function mentionsOwner(
   segments: readonly MessageSegment[],
