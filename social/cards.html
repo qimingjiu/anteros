@@ -14,6 +14,7 @@
     --ink: #7E84A8;
     --ink-deep: #4E5470;
     --blush: #D8C0C8;
+    --accent: #5B6BB4;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #e9eaf0; font-family: "Noto Serif SC", serif; }
@@ -31,8 +32,8 @@
   .grid-bg {
     position: absolute; inset: 0;
     background-image:
-      repeating-linear-gradient(0deg, rgba(126,132,168,0.055) 0 1px, transparent 1px 72px),
-      repeating-linear-gradient(90deg, rgba(126,132,168,0.055) 0 1px, transparent 1px 72px);
+      repeating-linear-gradient(0deg, rgba(126,132,168,0.05) 0 1px, transparent 1px 72px),
+      repeating-linear-gradient(90deg, rgba(126,132,168,0.05) 0 1px, transparent 1px 72px);
   }
   .frame-outer { position: absolute; inset: 36px; border: 1px solid rgba(126,132,168,0.42); }
   .frame-inner { position: absolute; inset: 46px; border: 1px solid rgba(126,132,168,0.20); }
@@ -89,40 +90,47 @@
     font-size: 30px; color: var(--ink-deep); letter-spacing: 4px;
   }
 
-  /* ===== 内容卡通用 ===== */
+  /* ===== 内容卡通用（外援修订版：出血巨盘 / 跳色粗标题 / 图标引导 / 去横线） ===== */
   .chapter-disc {
-    position: absolute; top: 150px; right: -110px;
-    width: 340px; height: 340px; border-radius: 50%;
-    background: var(--disc); opacity: 0.5;
+    position: absolute; top: -210px; right: -230px;
+    width: 680px; height: 680px; border-radius: 50%;
+    background: radial-gradient(circle at 42% 42%, var(--disc) 0%, rgba(217,222,242,0.45) 58%, rgba(217,222,242,0) 100%);
+  }
+  .chapter-disc::after {
+    content: ""; position: absolute; left: 18%; top: 58%;
+    width: 26%; height: 26%; border-radius: 50%;
+    border: 1.5px solid rgba(126,132,168,0.5);
   }
   .chapter-num {
     position: absolute; top: 178px; left: 96px;
     font-family: "Cormorant Garamond", serif; font-weight: 500; font-size: 40px; color: var(--ink);
   }
   .chapter-cat {
-    position: absolute; top: 230px; left: 96px;
+    position: absolute; top: 232px; left: 96px;
     font-size: 20px; color: var(--ink);
   }
   .chapter-title {
-    position: absolute; top: 310px; left: 96px; right: 110px;
-    font-size: 74px; font-weight: 700; line-height: 1.42; color: var(--ink-deep);
+    position: absolute; top: 318px; left: 96px; right: 110px;
+    font-size: 76px; font-weight: 700; line-height: 1.42; color: var(--ink-deep);
     letter-spacing: 2px;
   }
-  .chapter-rule { position: absolute; left: 96px; width: 220px; height: 2px; background: var(--ink-deep); }
   .blocks { position: absolute; left: 96px; right: 110px; }
-  .blk { position: relative; padding-left: 34px; margin-bottom: 66px; }
-  .blk::before {
-    content: ""; position: absolute; left: 0; top: 8px; bottom: 8px;
-    width: 2px; background: var(--mid);
+  .blk { position: relative; margin-bottom: 64px; }
+  .blk h3 {
+    display: flex; align-items: center; gap: 16px;
+    font-size: 36px; font-weight: 700; color: var(--accent); letter-spacing: 2px; margin-bottom: 14px;
   }
-  .blk h3 { font-size: 34px; font-weight: 600; color: var(--ink-deep); letter-spacing: 2px; margin-bottom: 14px; }
-  .blk p { font-size: 25px; line-height: 1.85; color: #5c6178; letter-spacing: 1px; }
+  .blk h3 svg {
+    width: 36px; height: 36px; flex: none;
+    stroke: var(--accent); stroke-width: 2.4; fill: none; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .blk h3 svg .fill { fill: var(--accent); stroke: none; }
+  .blk p { font-size: 25px; line-height: 1.85; color: #5c6178; letter-spacing: 1px; padding-left: 52px; }
   .blk p em { font-style: normal; color: var(--ink-deep); border-bottom: 1px solid var(--blush); }
   .aside {
     position: absolute; left: 96px; right: 110px;
     font-style: italic; font-size: 27px; color: var(--ink); letter-spacing: 2px;
   }
-  .footer-repo { position: absolute; bottom: 84px; left: 96px; right: 96px; display: flex; justify-content: space-between; font-size: 18px; color: var(--ink); }
 </style>
 </head>
 <body>
@@ -136,7 +144,6 @@
     <div class="top-label mono"><span>ANTEROS</span><span>QQ GROUP BOT · MIT</span></div>
     <div class="top-hairline"></div>
     <div class="moon"></div>
-    <!-- 公共领域棕榈枝位图（Wikimedia Commons），keyed 后嵌入；SVG 手绘版保留作兜底 -->
     <img class="palm-img" src="palm.png" alt="" onerror="this.style.display='none';document.querySelector('.palm').style.display='block'">
     <svg class="palm" viewBox="0 0 560 560" style="display:none">
       <path d="M 196 470 Q 292 296 432 136"/>
@@ -186,14 +193,13 @@
     <div class="chapter-num">Αʹ</div>
     <div class="chapter-cat mono">它解决什么</div>
     <div class="chapter-title">群里说好的事，<br>转头就沉进了聊天记录。</div>
-    <div class="chapter-rule" style="top:660px"></div>
-    <div class="blocks" style="top:730px">
+    <div class="blocks" style="top:720px">
       <div class="blk">
-        <h3>以前</h3>
+        <h3><svg viewBox="0 0 24 24"><path d="M6.5 4.8A7 7 0 1 1 5 12"/><path d="M5.5 3.5v4.2h4.2"/></svg>以前</h3>
         <p>约好的时间没人记得；同一个链接被发了三遍，没人发觉；想找一句"谁说过的话"，要翻几百条消息。</p>
       </div>
       <div class="blk">
-        <h3>现在</h3>
+        <h3><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.2"/><circle class="fill" cx="12" cy="12" r="3"/></svg>现在</h3>
         <p>它记得<em>谁、在什么时候、说过什么</em>；七天前的旧链接再出现，它会替你翻出原话。</p>
       </div>
     </div>
@@ -215,18 +221,17 @@
     <div class="chapter-num">Βʹ</div>
     <div class="chapter-cat mono">它是谁</div>
     <div class="chapter-title">一个长期在线的群友。</div>
-    <div class="chapter-rule" style="top:520px"></div>
     <div class="blocks" style="top:600px">
       <div class="blk">
-        <h3>记得住</h3>
+        <h3><svg viewBox="0 0 24 24"><path d="M7.5 4.5h9.5v15.5l-4.8-3.4-4.7 3.4z"/></svg>记得住</h3>
         <p>话题、约定、每个人说过的话——按群隔离，各群的记忆互不串门。</p>
       </div>
       <div class="blk">
-        <h3>查得到</h3>
+        <h3><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M14.8 14.8L20 20"/></svg>查得到</h3>
         <p>搜索、读网页、读群友发的 PDF 和表格，结论带来源。</p>
       </div>
       <div class="blk">
-        <h3>写得出</h3>
+        <h3><svg viewBox="0 0 24 24"><path d="M5 19.5l1.2-4L15.8 5l3 3L9.2 18.3z"/><path d="M13.8 7l3 3"/></svg>写得出</h3>
         <p>每天一篇群日报，Markdown 整理好，私聊送到你手上。</p>
       </div>
     </div>
@@ -248,18 +253,17 @@
     <div class="chapter-num">Γʹ</div>
     <div class="chapter-cat mono">记忆</div>
     <div class="chapter-title">谁说的、什么时候说的，<br>改口了也算数。</div>
-    <div class="chapter-rule" style="top:660px"></div>
-    <div class="blocks" style="top:730px">
+    <div class="blocks" style="top:720px">
       <div class="blk">
-        <h3>两级事实</h3>
+        <h3><svg viewBox="0 0 24 24"><path d="M12 3.5l8.5 4.2-8.5 4.3-8.5-4.3z"/><path d="M3.5 12.5l8.5 4.2 8.5-4.2"/></svg>两级事实</h3>
         <p>话题结束自动提取事实，先列<em>候选</em>，当事人确认才升级——转述不会被当成本人发言。</p>
       </div>
       <div class="blk">
-        <h3>随时修订</h3>
+        <h3><svg viewBox="0 0 24 24"><path d="M4.5 19.5l1.2-4L15.3 6l3 3-9.6 9.5z"/><path d="M13.2 8l3 3"/><path d="M4 22.5h16"/></svg>随时修订</h3>
         <p>/记忆、/记忆确认、/记忆作废、/搜 关键词，群里就能查、能改、能忘。</p>
       </div>
     </div>
-    <div class="aside" style="bottom:190px"> attribution 可追溯：每条记忆都连回原来的消息。</div>
+    <div class="aside" style="bottom:190px">归因可追溯：每条记忆都连回原来的消息。</div>
     <div class="bottom-hairline"></div>
     <div class="bottom-label mono"><span>MEMORY</span><span>ANTEROS</span></div>
   </div>
@@ -277,14 +281,13 @@
     <div class="chapter-num">Δʹ</div>
     <div class="chapter-cat mono">日报</div>
     <div class="chapter-title">每天睡前，<br>群里的事整理好送过来。</div>
-    <div class="chapter-rule" style="top:660px"></div>
-    <div class="blocks" style="top:730px">
+    <div class="blocks" style="top:720px">
       <div class="blk">
-        <h3>六个栏目</h3>
+        <h3><svg viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="4.5" width="6.5" height="6.5" rx="1"/><rect x="4.5" y="13.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1"/></svg>六个栏目</h3>
         <p>今日话题 · 资源分享 · 约定待办 · 未解决问题 · 趣味片段 · 数据范围。</p>
       </div>
       <div class="blk">
-        <h3>不编造</h3>
+        <h3><svg viewBox="0 0 24 24"><path d="M12 3.5l7 2.8v6c0 4.2-3 7.3-7 8.7-4-1.4-7-4.5-7-8.7v-6z"/><path d="M9 12l2.2 2.2 4-4.2"/></svg>不编造</h3>
         <p>人数与消息量<em>全部来自数据库统计</em>，不交给模型发挥；原子写入，投递失败有限重试，回执不明不乱发。</p>
       </div>
     </div>
@@ -306,14 +309,13 @@
     <div class="chapter-num">Εʹ</div>
     <div class="chapter-cat mono">工具</div>
     <div class="chapter-title">查得到资料，<br>做得了文件。</div>
-    <div class="chapter-rule" style="top:660px"></div>
-    <div class="blocks" style="top:730px">
+    <div class="blocks" style="top:720px">
       <div class="blk">
-        <h3>搜索与阅读</h3>
+        <h3><svg viewBox="0 0 24 24"><path d="M4 5.5c2.8-1.4 5.3-1.4 8 0 2.7-1.4 5.2-1.4 8 0v13c-2.8-1.4-5.3-1.4-8 0-2.7 1.4-5.2 1.4-8 0z"/><path d="M12 5.5v13"/></svg>搜索与阅读</h3>
         <p>实时信息先搜再答；网页正文阅读逐跳检查 robots，<em>摘要从不冒充全文</em>。</p>
       </div>
       <div class="blk">
-        <h3>生成与接收</h3>
+        <h3><svg viewBox="0 0 24 24"><path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4"/></svg>生成与接收</h3>
         <p>Word / PDF / Markdown 直接发成群文件；群友上传的文档，读得懂，标得出页码。</p>
       </div>
     </div>
@@ -335,18 +337,17 @@
     <div class="chapter-num">Ϛʹ</div>
     <div class="chapter-cat mono">可靠与边界</div>
     <div class="chapter-title">没收到回执，<br>就老实说不知道。</div>
-    <div class="chapter-rule" style="top:660px"></div>
-    <div class="blocks" style="top:730px">
+    <div class="blocks" style="top:720px">
       <div class="blk">
-        <h3>五态状态机</h3>
+        <h3><svg viewBox="0 0 24 24"><circle cx="4.5" cy="12" r="1.6"/><circle cx="9.2" cy="12" r="1.6"/><circle cx="14" cy="12" r="1.6"/><circle cx="18.8" cy="12" r="1.6"/><path d="M6.1 12h1.5M10.8 12h1.6M15.6 12h1.6"/></svg>五态状态机</h3>
         <p>排队 / 在途 / 确认 / 失败 / 不明，全部落库；<em>结果不明不盲目重发</em>，崩溃重启按持久状态续跑。</p>
       </div>
       <div class="blk">
-        <h3>权限钉死本人</h3>
+        <h3><svg viewBox="0 0 24 24"><circle cx="8.5" cy="8.5" r="4"/><path d="M11.5 11.5L19.5 19.5"/><path d="M16.5 16.5l2-2M19 19l1.8-1.8"/></svg>权限钉死本人</h3>
         <p>密钥只住环境变量；高权限工具只认主人本人，伪造的参数和引用都无权放行。</p>
       </div>
     </div>
-    <div class="aside" style="bottom:190px">908 个测试用例，从断线重连到"发没发出去不知道"，全都演过。</div>
+    <div class="aside" style="bottom:190px">910 个测试用例，从断线重连到"发没发出去不知道"，全都演过。</div>
     <div class="bottom-hairline"></div>
     <div class="bottom-label mono"><span>RELIABILITY</span><span>ANTEROS</span></div>
   </div>
@@ -364,18 +365,17 @@
     <div class="chapter-num">Ζʹ</div>
     <div class="chapter-cat mono">陪伴</div>
     <div class="chapter-title">不等被叫，<br>也会先开口。</div>
-    <div class="chapter-rule" style="top:660px"></div>
-    <div class="blocks" style="top:730px">
+    <div class="blocks" style="top:720px">
       <div class="blk">
-        <h3>早安天气</h3>
+        <h3><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M9 1.8v1.6M3 8h1.6M5 4l1.2 1.2M13 4l-1.2 1.2"/><path d="M8 18.5h9.5a3.8 3.8 0 0 0 .6-7.5 5 5 0 0 0-9.6-1A3.4 3.4 0 0 0 8 18.5z"/></svg>早安天气</h3>
         <p>每天清晨，今天的雨、降温和穿衣建议提前送到私聊。</p>
       </div>
       <div class="blk">
-        <h3>群聊提醒</h3>
+        <h3><svg viewBox="0 0 24 24"><path d="M6.5 16v-4.5a5.5 5.5 0 0 1 11 0V16l2 3h-15z"/><path d="M10.5 21.5a1.8 1.8 0 0 0 3 0"/></svg>群聊提醒</h3>
         <p>循环提醒到点在群里 @ 你；跳过、延期、取消，都是一句话的事。</p>
       </div>
       <div class="blk">
-        <h3>点歌</h3>
+        <h3><svg viewBox="0 0 24 24"><path d="M9.5 18.5V6.8L19 4.8v11.4"/><circle cx="7" cy="18.5" r="2.5"/><circle cx="16.5" cy="16.2" r="2.5"/></svg>点歌</h3>
         <p>报个歌名，它去网易云、Jamendo、ccMixter 替你找。</p>
       </div>
     </div>
