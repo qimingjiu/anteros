@@ -254,6 +254,7 @@ export class Agent {
   private sessionKey(m: MessageRecord): string { return JSON.stringify([m.accountId, m.conversationId, m.senderId]); }
 
   private rememberDirectSession(m: MessageRecord): void {
+    if (!this.isToolOwner(m.senderId)) return; // 窗口状态只为主人维护
     const now = Date.now();
     for (const [key, at] of this.directSessions) if (now - at >= 120000) this.directSessions.delete(key);
     const key = this.sessionKey(m);
@@ -315,6 +316,8 @@ export class Agent {
   }
 
   private isDirectedFollowup(m: MessageRecord): boolean {
+    // 两分钟连续对话窗口是主人专属：群友的追问回到环境通道，受冷却与配额约束。
+    if (!this.isToolOwner(m.senderId)) return false;
     const text = senderText(m.segments);
     const selfId = this.selfId();
     // 明确向别人说话时，不能借召唤会话替别人答复。
