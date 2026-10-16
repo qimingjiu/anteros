@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Anteros · 棕榈杖 — 宣传卡组</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F6F6F8;
+    --disc: #D9DEF2;
+    --mid: #A0A5C5;
+    --ink: #7E84A8;
+    --ink-deep: #4E5470;
+    --blush: #D8C0C8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #e9eaf0; font-family: "Noto Serif SC", serif; }
+  .card { display: none; }
+  .card-inner {
+    width: 1080px; height: 1440px; position: relative; overflow: hidden;
+    background: var(--paper);
+    transform-origin: top left;
+  }
+  body.export, body.export .card-inner { width: 1080px; height: 1440px; }
+  body.export { background: var(--paper); }
+  body:not(.export) .card.show { display: block; }
+  body.export .card.show { display: block !important; }
+
+  .grid-bg {
+    position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(126,132,168,0.055) 0 1px, transparent 1px 72px),
+      repeating-linear-gradient(90deg, rgba(126,132,168,0.055) 0 1px, transparent 1px 72px);
+  }
+  .frame-outer { position: absolute; inset: 36px; border: 1px solid rgba(126,132,168,0.42); }
+  .frame-inner { position: absolute; inset: 46px; border: 1px solid rgba(126,132,168,0.20); }
+
+  .mono { font-family: "JetBrains Mono", monospace; letter-spacing: 3px; }
+  .top-label {
+    position: absolute; top: 84px; left: 96px; right: 96px;
+    display: flex; justify-content: space-between;
+    font-size: 20px; color: var(--ink);
+  }
+  .top-hairline { position: absolute; top: 128px; left: 96px; right: 96px; height: 1px; background: rgba(126,132,168,0.35); }
+  .bottom-hairline { position: absolute; bottom: 128px; left: 96px; right: 96px; height: 1px; background: rgba(126,132,168,0.35); }
+  .bottom-label {
+    position: absolute; bottom: 84px; left: 96px; right: 96px;
+    display: flex; justify-content: space-between;
+    font-size: 18px; color: var(--ink);
+  }
+
+  /* ===== 封面 ===== */
+  .moon {
+    position: absolute; left: 50%; top: 560px; transform: translate(-50%, -50%);
+    width: 700px; height: 700px; border-radius: 50%;
+    background: var(--disc);
+    box-shadow: 0 30px 80px rgba(160,165,197,0.35);
+  }
+  .moon::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: radial-gradient(circle at 34% 30%, rgba(246,246,248,0.75), transparent 58%);
+  }
+  .palm { position: absolute; left: 50%; top: 552px; transform: translate(-50%, -50%); width: 660px; height: 660px; }
+  .palm path { stroke: var(--ink-deep); stroke-width: 3.4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .palm .vein { stroke-width: 2.2; stroke: var(--ink); }
+  .palm circle { fill: var(--blush); stroke: none; }
+  .palm-img {
+    position: absolute; left: 50%; top: 545px; transform: translate(-50%, -50%);
+    width: 620px; mix-blend-mode: multiply;
+  }
+  .greek {
+    position: absolute; top: 920px; left: 0; right: 0; text-align: center;
+    font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 34px; color: var(--ink);
+  }
+  .title {
+    position: absolute; top: 982px; left: 0; right: 0; text-align: center;
+    font-size: 168px; font-weight: 700; letter-spacing: 30px; text-indent: 30px; color: var(--ink-deep);
+    line-height: 1.1;
+  }
+  .title-en {
+    position: absolute; top: 1188px; left: 0; right: 0; text-align: center;
+    font-family: "Cormorant Garamond", serif; font-weight: 600; font-size: 54px;
+    letter-spacing: 14px; text-indent: 14px; color: var(--ink);
+  }
+  .tagline {
+    position: absolute; top: 1256px; left: 0; right: 0; text-align: center;
+    font-size: 30px; color: var(--ink-deep); letter-spacing: 4px;
+  }
+
+  /* ===== 内容卡通用 ===== */
+  .chapter-disc {
+    position: absolute; top: 150px; right: -110px;
+    width: 340px; height: 340px; border-radius: 50%;
+    background: var(--disc); opacity: 0.5;
+  }
+  .chapter-num {
+    position: absolute; top: 178px; left: 96px;
+    font-family: "Cormorant Garamond", serif; font-weight: 500; font-size: 40px; color: var(--ink);
+  }
+  .chapter-cat {
+    position: absolute; top: 230px; left: 96px;
+    font-size: 20px; color: var(--ink);
+  }
+  .chapter-title {
+    position: absolute; top: 310px; left: 96px; right: 110px;
+    font-size: 74px; font-weight: 700; line-height: 1.42; color: var(--ink-deep);
+    letter-spacing: 2px;
+  }
+  .chapter-rule { position: absolute; left: 96px; width: 220px; height: 2px; background: var(--ink-deep); }
+  .blocks { position: absolute; left: 96px; right: 110px; }
+  .blk { position: relative; padding-left: 34px; margin-bottom: 66px; }
+  .blk::before {
+    content: ""; position: absolute; left: 0; top: 8px; bottom: 8px;
+    width: 2px; background: var(--mid);
+  }
+  .blk h3 { font-size: 34px; font-weight: 600; color: var(--ink-deep); letter-spacing: 2px; margin-bottom: 14px; }
+  .blk p { font-size: 25px; line-height: 1.85; color: #5c6178; letter-spacing: 1px; }
+  .blk p em { font-style: normal; color: var(--ink-deep); border-bottom: 1px solid var(--blush); }
+  .aside {
+    position: absolute; left: 96px; right: 110px;
+    font-style: italic; font-size: 27px; color: var(--ink); letter-spacing: 2px;
+  }
+  .footer-repo { position: absolute; bottom: 84px; left: 96px; right: 96px; display: flex; justify-content: space-between; font-size: 18px; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<!-- 卡 1 · 封面 -->
+<section class="card show" data-card="1">
+  <div class="card-inner">
+    <div class="grid-bg"></div>
+    <div class="frame-outer"></div>
+    <div class="frame-inner"></div>
+    <div class="top-label mono"><span>ANTEROS</span><span>QQ GROUP BOT · MIT</span></div>
+    <div class="top-hairline"></div>
+    <div class="moon"></div>
+    <!-- 公共领域棕榈枝位图（Wikimedia Commons），keyed 后嵌入；SVG 手绘版保留作兜底 -->
+    <img class="palm-img" src="palm.png" alt="" onerror="this.style.display='none';document.querySelector('.palm').style.display='block'">
+    <svg class="palm" viewBox="0 0 560 560" style="display:none">
+      <path d="M 196 470 Q 292 296 432 136"/>
+      <path class="vein" d="M 227.8 414.7 Q 189.3 403.2 150.6 410.2"/>
+      <path class="vein" d="M 227.8 414.7 Q 249.2 436.4 272.1 478.1"/>
+      <path class="vein" d="M 242.9 390.0 Q 187.3 370.9 133.3 376.1"/>
+      <path class="vein" d="M 242.9 390.0 Q 273.5 425.5 307.3 479.8"/>
+      <path class="vein" d="M 258.4 365.5 Q 199.2 348.0 142.6 347.1"/>
+      <path class="vein" d="M 258.4 365.5 Q 290.6 400.7 323.8 462.9"/>
+      <path class="vein" d="M 274.4 341.1 Q 209.1 303.3 145.1 292.6"/>
+      <path class="vein" d="M 274.4 341.1 Q 310.7 387.7 349.4 457.1"/>
+      <path class="vein" d="M 290.8 316.9 Q 218.7 297.8 147.0 298.8"/>
+      <path class="vein" d="M 290.8 316.9 Q 326.2 371.2 361.7 443.4"/>
+      <path class="vein" d="M 307.7 292.8 Q 247.3 261.0 186.9 256.4"/>
+      <path class="vein" d="M 307.7 292.8 Q 341.0 332.2 377.4 398.1"/>
+      <path class="vein" d="M 325.1 268.9 Q 271.6 238.2 219.9 229.6"/>
+      <path class="vein" d="M 325.1 268.9 Q 357.7 301.4 389.6 360.8"/>
+      <path class="vein" d="M 342.9 245.1 Q 295.9 216.4 249.2 211.6"/>
+      <path class="vein" d="M 342.9 245.1 Q 363.2 281.2 385.0 335.2"/>
+      <path class="vein" d="M 361.1 221.5 Q 319.6 194.2 278.6 188.0"/>
+      <path class="vein" d="M 361.1 221.5 Q 385.8 246.3 412.2 294.5"/>
+      <path class="vein" d="M 379.9 198.0 Q 347.2 178.2 315.7 184.8"/>
+      <path class="vein" d="M 379.9 198.0 Q 394.3 215.6 411.2 255.5"/>
+      <path class="vein" d="M 399.0 174.6 Q 374.5 157.7 354.9 161.6"/>
+      <path class="vein" d="M 399.0 174.6 Q 409.5 183.7 419.5 215.8"/>
+      <circle cx="432" cy="136" r="7"/>
+      <circle cx="196" cy="470" r="5.5"/>
+    </svg>
+    <div class="greek">Ἀντέρως —— 被回应的爱之神</div>
+    <div class="title">棕榈杖</div>
+    <div class="title-en">A N T E R O S</div>
+    <div class="tagline">被点名，才开口。开口，必有回应。</div>
+    <div class="bottom-hairline"></div>
+    <div class="bottom-label mono"><span>MEMORY · TOOLS · DAILY REPORT</span><span>GITHUB / QIMINGJIU</span></div>
+  </div>
+</section>
+
+<!-- 卡 2 · 痛点 -->
+<section class="card" data-card="2">
+  <div class="card-inner">
+    <div class="grid-bg"></div>
+    <div class="frame-outer"></div>
+    <div class="frame-inner"></div>
+    <div class="chapter-disc"></div>
+    <div class="top-label mono"><span>ANTEROS</span><span>01 / 07</span></div>
+    <div class="top-hairline"></div>
+    <div class="chapter-num">Αʹ</div>
+    <div class="chapter-cat mono">它解决什么</div>
+    <div class="chapter-title">群里说好的事，<br>转头就沉进了聊天记录。</div>
+    <div class="chapter-rule" style="top:660px"></div>
+    <div class="blocks" style="top:730px">
+      <div class="blk">
+        <h3>以前</h3>
+        <p>约好的时间没人记得；同一个链接被发了三遍，没人发觉；想找一句"谁说过的话"，要翻几百条消息。</p>
+      </div>
+      <div class="blk">
+        <h3>现在</h3>
+        <p>它记得<em>谁、在什么时候、说过什么</em>；七天前的旧链接再出现，它会替你翻出原话。</p>
+      </div>
+    </div>
+    <div class="aside" style="bottom:190px">记忆不是历史，是下一次不必重讲。</div>
+    <div class="bottom-hairline"></div>
+    <div class="bottom-label mono"><span>MEMORY</span><span>ANTEROS</span></div>
+  </div>
+</section>
+
+<!-- 卡 3 · 是什么 -->
+<section class="card" data-card="3">
+  <div class="card-inner">
+    <div class="grid-bg"></div>
+    <div class="frame-outer"></div>
+    <div class="frame-inner"></div>
+    <div class="chapter-disc"></div>
+    <div class="top-label mono"><span>ANTEROS</span><span>02 / 07</span></div>
+    <div class="top-hairline"></div>
+    <div class="chapter-num">Βʹ</div>
+    <div class="chapter-cat mono">它是谁</div>
+    <div class="chapter-title">一个长期在线的群友。</div>
+    <div class="chapter-rule" style="top:520px"></div>
+    <div class="blocks" style="top:600px">
+      <div class="blk">
+        <h3>记得住</h3>
+        <p>话题、约定、每个人说过的话——按群隔离，各群的记忆互不串门。</p>
+      </div>
+      <div class="blk">
+        <h3>查得到</h3>
+        <p>搜索、读网页、读群友发的 PDF 和表格，结论带来源。</p>
+      </div>
+      <div class="blk">
+        <h3>写得出</h3>
+        <p>每天一篇群日报，Markdown 整理好，私聊送到你手上。</p>
+      </div>
+    </div>
+    <div class="aside" style="bottom:190px">TypeScript · Node.js · SQLite · MIT 开源</div>
+    <div class="bottom-hairline"></div>
+    <div class="bottom-label mono"><span>SELF-HOSTED</span><span>ANTEROS</span></div>
+  </div>
+</section>
+
+<!-- 卡 4 · 记忆 -->
+<section class="card" data-card="4">
+  <div class="card-inner">
+    <div class="grid-bg"></div>
+    <div class="frame-outer"></div>
+    <div class="frame-inner"></div>
+    <div class="chapter-disc"></div>
+    <div class="top-label mono"><span>ANTEROS</span><span>03 / 07</span></div>
+    <div class="top-hairline"></div>
+    <div class="chapter-num">Γʹ</div>
+    <div class="chapter-cat mono">记忆</div>
+    <div class="chapter-title">谁说的、什么时候说的，<br>改口了也算数。</div>
+    <div class="chapter-rule" style="top:660px"></div>
+    <div class="blocks" style="top:730px">
+      <div class="blk">
+        <h3>两级事实</h3>
+        <p>话题结束自动提取事实，先列<em>候选</em>，当事人确认才升级——转述不会被当成本人发言。</p>
+      </div>
+      <div class="blk">
+        <h3>随时修订</h3>
+        <p>/记忆、/记忆确认、/记忆作废、/搜 关键词，群里就能查、能改、能忘。</p>
+      </div>
+    </div>
+    <div class="aside" style="bottom:190px"> attribution 可追溯：每条记忆都连回原来的消息。</div>
+    <div class="bottom-hairline"></div>
+    <div class="bottom-label mono"><span>MEMORY</span><span>ANTEROS</span></div>
+  </div>
+</section>
+
+<!-- 卡 5 · 日报 -->
+<section class="card" data-card="5">
+  <div class="card-inner">
+    <div class="grid-bg"></div>
+    <div class="frame-outer"></div>
+    <div class="frame-inner"></div>
+    <div class="chapter-disc"></div>
+    <div class="top-label mono"><span>ANTEROS</span><span>04 / 07</span></div>
+    <div class="top-hairline"></div>
+    <div class="chapter-num">Δʹ</div>
+    <div class="chapter-cat mono">日报</div>
+    <div class="chapter-title">每天睡前，<br>群里的事整理好送过来。</div>
+    <div class="chapter-rule" style="top:660px"></div>
+    <div class="blocks" style="top:730px">
+      <div class="blk">
+        <h3>六个栏目</h3>
+        <p>今日话题 · 资源分享 · 约定待办 · 未解决问题 · 趣味片段 · 数据范围。</p>
+      </div>
+      <div class="blk">
+        <h3>不编造</h3>
+        <p>人数与消息量<em>全部来自数据库统计</em>，不交给模型发挥；原子写入，投递失败有限重试，回执不明不乱发。</p>
+      </div>
+    </div>
+    <div class="aside" style="bottom:190px">一篇 Markdown，私聊送达；断过网的日子，会如实标注缺口。</div>
+    <div class="bottom-hairline"></div>
+    <div class="bottom-label mono"><span>DAILY REPORT</span><span>ANTEROS</span></div>
+  </div>
+</section>
+
+<!-- 卡 6 · 工具 -->
+<section class="card" data-card="6">
+  <div class="card-inner">
+    <div class="grid-bg"></div>
+    <div class="frame-outer"></div>
+    <div class="frame-inner"></div>
+    <div class="chapter-disc"></div>
+    <div class="top-label mono"><span>ANTEROS</span><span>05 / 07</span></div>
+    <div class="top-hairline"></div>
+    <div class="chapter-num">Εʹ</div>
+    <div class="chapter-cat mono">工具</div>
+    <div class="chapter-title">查得到资料，<br>做得了文件。</div>
+    <div class="chapter-rule" style="top:660px"></div>
+    <div class="blocks" style="top:730px">
+      <div class="blk">
+        <h3>搜索与阅读</h3>
+        <p>实时信息先搜再答；网页正文阅读逐跳检查 robots，<em>摘要从不冒充全文</em>。</p>
+      </div>
+      <div class="blk">
+        <h3>生成与接收</h3>
+        <p>Word / PDF / Markdown 直接发成群文件；群友上传的文档，读得懂，标得出页码。</p>
+      </div>
+    </div>
+    <div class="aside" style="bottom:190px">还能挂 MCP：Notion、邮箱、飞书、打车……工具是你的，不是它的。</div>
+    <div class="bottom-hairline"></div>
+    <div class="bottom-label mono"><span>TOOLS &amp; MCP</span><span>ANTEROS</span></div>
+  </div>
+</section>
+
+<!-- 卡 7 · 可靠 -->
+<section class="card" data-card="7">
+  <div class="card-inner">
+    <div class="grid-bg"></div>
+    <div class="frame-outer"></div>
+    <div class="frame-inner"></div>
+    <div class="chapter-disc"></div>
+    <div class="top-label mono"><span>ANTEROS</span><span>06 / 07</span></div>
+    <div class="top-hairline"></div>
+    <div class="chapter-num">Ϛʹ</div>
+    <div class="chapter-cat mono">可靠与边界</div>
+    <div class="chapter-title">没收到回执，<br>就老实说不知道。</div>
+    <div class="chapter-rule" style="top:660px"></div>
+    <div class="blocks" style="top:730px">
+      <div class="blk">
+        <h3>五态状态机</h3>
+        <p>排队 / 在途 / 确认 / 失败 / 不明，全部落库；<em>结果不明不盲目重发</em>，崩溃重启按持久状态续跑。</p>
+      </div>
+      <div class="blk">
+        <h3>权限钉死本人</h3>
+        <p>密钥只住环境变量；高权限工具只认主人本人，伪造的参数和引用都无权放行。</p>
+      </div>
+    </div>
+    <div class="aside" style="bottom:190px">908 个测试用例，从断线重连到"发没发出去不知道"，全都演过。</div>
+    <div class="bottom-hairline"></div>
+    <div class="bottom-label mono"><span>RELIABILITY</span><span>ANTEROS</span></div>
+  </div>
+</section>
+
+<!-- 卡 8 · 陪伴 -->
+<section class="card" data-card="8">
+  <div class="card-inner">
+    <div class="grid-bg"></div>
+    <div class="frame-outer"></div>
+    <div class="frame-inner"></div>
+    <div class="chapter-disc"></div>
+    <div class="top-label mono"><span>ANTEROS</span><span>07 / 07</span></div>
+    <div class="top-hairline"></div>
+    <div class="chapter-num">Ζʹ</div>
+    <div class="chapter-cat mono">陪伴</div>
+    <div class="chapter-title">不等被叫，<br>也会先开口。</div>
+    <div class="chapter-rule" style="top:660px"></div>
+    <div class="blocks" style="top:730px">
+      <div class="blk">
+        <h3>早安天气</h3>
+        <p>每天清晨，今天的雨、降温和穿衣建议提前送到私聊。</p>
+      </div>
+      <div class="blk">
+        <h3>群聊提醒</h3>
+        <p>循环提醒到点在群里 @ 你；跳过、延期、取消，都是一句话的事。</p>
+      </div>
+      <div class="blk">
+        <h3>点歌</h3>
+        <p>报个歌名，它去网易云、Jamendo、ccMixter 替你找。</p>
+      </div>
+    </div>
+    <div class="aside" style="bottom:190px">github.com/qimingjiu/anteros · MIT · 被点名，才开口。</div>
+    <div class="bottom-hairline"></div>
+    <div class="bottom-label mono"><span>PROACTIVE</span><span>ANTEROS</span></div>
+  </div>
+</section>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  const want = params.get("card");
+  const cards = [...document.querySelectorAll(".card")];
+  if (want !== null) {
+    document.body.classList.add("export");
+    cards.forEach(c => c.classList.toggle("show", c.dataset.card === want));
+  }
+  function fit() {
+    if (document.body.classList.contains("export")) return;
+    const scale = Math.min(document.documentElement.clientWidth / 1080, 1);
+    document.querySelectorAll(".card-inner").forEach(el => { el.style.transform = `scale(${scale})`; });
+    document.querySelectorAll(".card").forEach(el => { el.style.height = 1440 * scale + "px"; });
+  }
+  addEventListener("resize", fit); fit();
+</script>
+</body>
+</html>

@@ -12,3 +12,6 @@ __pycache__/
 # 私有部署配置与人设：只保留示例文件进仓库
 config.yaml
 persona.md
+social/palm-src/
+social/palm-preview.png
+social/contact-sheet.png

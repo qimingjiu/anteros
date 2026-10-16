@@ -271,18 +271,18 @@ test("群接话限制：自动接话重复正文在冷却过去后仍静默丢�
   assert.equal(f.sent.length, 2);
 });
 
-test("群接话限制：身份窗口内的短附和交给主模型静默，旁人仍受环境限制", async t => {
+test("群接话限制：连续对话窗口只对主人开放，群友追问回到环境通道", async t => {
   const f = fixture(t, [answer("普通环境回复"), answer("收到直接召唤"), answer("这次解释原因"),
     { content: "", toolCalls: [{ id: "ack-silent", name: "conversation_action", arguments: '{"action":"silent"}' }], finishReason: "tool_calls" }]);
   f.cfg.persona.name = "κόραξ";
   await f.run(f.message("群友的普通话题"));
-  await f.run(f.message("κόραξ，你解释一下当前这个意思"));
-  await f.run(f.message("为什么这样做？"));
+  await f.run(f.message("κόραξ，你解释一下当前这个意思", { senderId: OWNER }));
+  await f.run(f.message("为什么这样做？", { senderId: OWNER }));
   assert.equal(f.calls.length, 3);
   assert.equal(f.sent.length, 3);
-  await f.run(f.message("嗯"));
+  await f.run(f.message("嗯", { senderId: OWNER }));
   await f.run(f.message("旁人为什么这么说？", { senderId: "23456789" }));
-  assert.equal(f.calls.length, 4, "同身份连续短句进入主模型，旁人不能继承窗口");
+  assert.equal(f.calls.length, 4, "主人的连续短句进入主模型，群友没有窗口、环境追问受冷却约束");
   assert.equal(f.db.recentSendTasks(20).length, 3);
 });
 
@@ -393,7 +393,7 @@ test("群接话限制：暖启动恢复主人提及的环境冷却，等待后�
   }
 });
 
-test("群接话限制：1200ms内的普通观察被优先请求取消，主人文档请求或同发送者明确追问不被吞掉", async t => {
+test("群接话限制：1200ms内的普通观察被优先请求取消，主人文档请求独立排队，群友追问并入观察", async t => {
   for (const mode of ["document", "followup"] as const) {
     const markdown = "# 当前文档\n\n本次新的完整正文。";
     const steps = mode === "document" ? [{ content: "", toolCalls: [{ id: "document", name: "generate_document",
@@ -431,9 +431,9 @@ test("群接话限制：1200ms内的普通观察被优先请求取消，主人�
     t.mock.timers.tick(1200);
     await waiting;
     await flush();
-    assert.equal(f.calls.length, mode === "document" ? 2 : 1, `${mode}: 明确请求必须独立排队，不能合并进已被拒绝的观察`);
-    assert.match(String(f.calls[0]!.messages[1]!.content), mode === "document" ? /生成一份 Markdown 文档发给我/ : /为什么要采用这个方案/);
-    assert.equal(f.sent.filter(task => task.kind === "reply").length, 2);
+    assert.equal(f.calls.length, mode === "document" ? 2 : 0, `${mode}: 主人明确请求独立排队；群友追问没有专属窗口，受环境冷却约束`);
+    if (mode === "document") assert.match(String(f.calls[0]!.messages[1]!.content), /生成一份 Markdown 文档发给我/);
+    assert.equal(f.sent.filter(task => task.kind === "reply").length, mode === "document" ? 2 : 1);
     if (mode === "document") {
       const files = f.sent.filter(task => task.payload.kind === "file");
       assert.equal(files.length, 1);
