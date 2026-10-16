@@ -1,405 +1,146 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<title>Anteros · 棕榈杖 — 宣传卡组</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="棕榈杖 Anteros：一个住在 QQ 群里的 AI 群友。盛夏群像宣传卡组。">
+<title>棕榈杖 Anteros · 盛夏群像</title>
 <style>
-  :root {
-    --paper: #F6F6F8;
-    --disc: #D9DEF2;
-    --mid: #A0A5C5;
-    --ink: #7E84A8;
-    --ink-deep: #4E5470;
-    --blush: #D8C0C8;
-    --accent: #5B6BB4;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #e9eaf0; font-family: "Noto Serif SC", serif; }
-  .card { display: none; }
-  .card-inner {
-    width: 1080px; height: 1440px; position: relative; overflow: hidden;
-    background: var(--paper);
-    transform-origin: top left;
-  }
-  body.export, body.export .card-inner { width: 1080px; height: 1440px; }
-  body.export { background: var(--paper); }
-  body:not(.export) .card.show { display: block; }
-  body.export .card.show { display: block !important; }
+@font-face{font-family:AnterosSerif;src:url('summer-assets/serif-bold.woff2') format('woff2');font-weight:700 900;font-display:block}
+@font-face{font-family:AnterosSerif;src:url('summer-assets/serif-regular.woff2') format('woff2');font-weight:400 600;font-display:block}
+@font-face{font-family:AnterosLatin;src:url('summer-assets/latin.woff2') format('woff2');font-weight:500 800;font-display:block}
+@font-face{font-family:AnterosLatin;src:url('summer-assets/latin-italic.woff2') format('woff2');font-weight:400 700;font-style:italic;font-display:block}
+:root{--yellow:#f5d933;--green:#086849;--paper:#fff4df;--muted:#447258;--lime:#dee68f}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#eee9d9;color:var(--green);font-family:AnterosSerif,'SimSun',serif}a{color:inherit}button{font:inherit}
+.page-head{max-width:1520px;margin:0 auto;padding:36px 28px 28px;display:flex;justify-content:space-between;align-items:end;gap:24px}.page-head h1{font:600 36px/1 AnterosLatin,Georgia,serif;letter-spacing:1px;margin:0 0 13px}.page-head p{font:13px/1.8 'Microsoft YaHei',sans-serif;margin:0}.page-head a{font:13px/1.8 'Microsoft YaHei',sans-serif;text-underline-offset:4px}.gallery{max-width:1520px;margin:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;padding:0 28px 36px}.card{width:100%;position:relative;overflow:hidden;scroll-margin-top:20px}.card-inner{position:relative;width:1080px;height:1440px;overflow:hidden;background:var(--paper);color:var(--green);transform-origin:top left;isolation:isolate}.yellow{background:var(--yellow)}.card-inner::after{content:'';position:absolute;inset:0;z-index:20;pointer-events:none;opacity:.023;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath filter='url(%23n)' opacity='.7' d='M0 0h180v180H0z'/%3E%3C/svg%3E")}
+h2,h3,p{margin:0}.latin{font-family:AnterosLatin,Georgia,serif}.sans{font-family:'Microsoft YaHei',sans-serif}.small{font:20px/1.6 Consolas,'Microsoft YaHei',sans-serif;letter-spacing:1.8px}.mast{position:absolute;left:65px;right:65px;top:53px;display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--green);padding-bottom:25px;z-index:5}.mast .latin{font-size:37px;letter-spacing:3px}.mast .small{font-size:18px}.chapter{position:absolute;left:68px;top:162px;font:22px/1.7 'Microsoft YaHei',sans-serif;letter-spacing:3px}.foot{position:absolute;left:65px;right:65px;bottom:43px;display:flex;justify-content:space-between;gap:25px;align-items:end;font:18px/1.6 Consolas,'Microsoft YaHei',sans-serif;letter-spacing:.7px;z-index:6}.foot.rule{border-top:1px solid var(--green);padding-top:20px}.palm-print{position:absolute;background:var(--green);mask:url('summer-assets/palm.png') center/contain no-repeat;-webkit-mask:url('summer-assets/palm.png') center/contain no-repeat;pointer-events:none}.display{font-weight:700;letter-spacing:-4px}.body{font-size:30px;line-height:1.8;letter-spacing:.5px}
+/* 01 / 已确认的盛夏封面 */
+.s1-mast{position:absolute;left:64px;right:64px;top:53px;display:flex;justify-content:space-between;align-items:baseline}.s1-mast .latin{font-size:48px;letter-spacing:3px}.s1-mast .small{font-size:18px}.s1-rule{position:absolute;left:64px;right:64px;top:128px;height:2px;background:var(--green)}.s1-head{position:absolute;left:62px;top:187px;font-size:115px;line-height:1.28;z-index:3}.s1-head em{font-style:normal;background:var(--green);color:var(--paper);padding:0 14px 7px 11px;display:inline-block;transform:rotate(-3deg);margin-left:9px}.s1-head .indent{display:block;padding-left:193px}.s1-window{position:absolute;left:372px;top:651px;width:580px;height:525px;background:var(--paper);border-radius:280px 280px 0 0;transform:rotate(7deg)}.s1-palm{left:272px;top:576px;width:885px;height:770px;transform:rotate(-20deg)}.s1-side{position:absolute;left:68px;top:727px;writing-mode:vertical-rl;font-size:33px;line-height:1.7;letter-spacing:5px;z-index:3}.s1-side span{color:var(--paper);background:var(--green);padding:15px 8px;display:inline-block;margin-left:18px}.s1-again{position:absolute;right:-12px;top:1122px;font-size:104px;line-height:1.08;letter-spacing:-3px;white-space:nowrap;transform:rotate(-5deg);z-index:3;background:var(--paper);padding:6px 37px 16px 26px;font-style:italic}.s1-name{position:absolute;left:65px;bottom:165px;font-size:47px;font-weight:700;letter-spacing:4px;z-index:3}
+/* 02 / 被刷走的约定。斜排消息把“滚动”变成画面。 */
+.s2-head{position:absolute;left:60px;top:244px;font-size:111px;line-height:1.32;z-index:3}.s2-head em{font-style:normal;background:var(--yellow);display:inline-block;transform:rotate(-2deg);padding:0 17px 8px 7px;margin-left:70px}.s2-intro{position:absolute;left:68px;top:589px;font-size:31px;line-height:1.8}.s2-ribbon{position:absolute;right:-30px;top:736px;width:620px;height:390px;background:var(--yellow);transform:rotate(8deg)}.s2-stream{position:absolute;left:65px;right:65px;top:766px;z-index:3}.s2-stream small{font:18px/1.5 Consolas,'Microsoft YaHei',sans-serif;letter-spacing:2px;display:block;margin-bottom:25px}.s2-message{font-size:40px;line-height:1.5;background:var(--paper);border-bottom:1px solid var(--green);padding:19px 27px;width:720px;transform:rotate(-3deg);margin-bottom:26px}.s2-message:nth-of-type(2){margin-left:168px;transform:rotate(2deg);width:760px}.s2-message:nth-of-type(3){width:790px;transform:rotate(-1deg)}.s2-close{position:absolute;left:65px;top:1194px;font-size:48px;line-height:1.45;font-weight:700}.s2-close span{background:var(--yellow);padding:0 7px}.s2-edge{position:absolute;right:29px;top:218px;writing-mode:vertical-rl;font:18px/1.5 Consolas,monospace;letter-spacing:5px}
+/* 03 / 群友。用巨大名词和一条横向宣言建立身份。 */
+.s3-head{position:absolute;left:58px;top:215px;font-size:178px;line-height:1.16;letter-spacing:-8px;z-index:2}.s3-head span{padding-left:57px}.s3-side{position:absolute;left:655px;top:310px;font-size:32px;line-height:1.95;letter-spacing:1px}.s3-palm{left:640px;top:570px;width:420px;height:370px;transform:rotate(12deg)}.s3-name-note{position:absolute;left:70px;top:751px;font:italic 43px/1.3 AnterosLatin,Georgia,serif;letter-spacing:1px}.s3-band{position:absolute;left:0;right:0;top:964px;height:202px;background:var(--green);color:var(--paper);display:flex;align-items:center;justify-content:center;gap:32px;font-size:55px;letter-spacing:2px;transform:rotate(-3deg);width:1160px;margin-left:-40px}.s3-band i{font-style:normal;color:var(--yellow);font-size:33px}.s3-behavior{position:absolute;left:68px;top:1220px;font-size:30px;line-height:1.75}
+/* 04 / 引用旧消息。一问一答落在一整张黄色纸带上。 */
+.s4-head{position:absolute;left:60px;top:252px;font-size:103px;line-height:1.35}.s4-head strong{font-weight:700;background:var(--yellow);padding:0 7px}.s4-intro{position:absolute;left:68px;top:566px;font-size:29px;line-height:1.75}.s4-demo{position:absolute;left:0;right:0;top:705px;height:380px;background:var(--yellow)}.s4-demo-label{position:absolute;left:67px;top:26px;font:18px/1.5 Consolas,'Microsoft YaHei',sans-serif;letter-spacing:2px}.s4-question{position:absolute;left:66px;right:150px;top:78px;background:var(--paper);padding:25px 34px;font-size:36px;line-height:1.55;transform:rotate(-2deg)}.s4-answer{position:absolute;left:212px;right:-10px;top:195px;background:var(--green);color:var(--paper);padding:23px 30px 30px 42px;transform:rotate(2deg)}.s4-answer small{display:block;font:18px/1.5 Consolas,'Microsoft YaHei',sans-serif;letter-spacing:1.5px;margin-bottom:13px}.s4-answer p{font-size:37px;line-height:1.5}.s4-turn{position:absolute;left:64px;top:217px;font:130px/1 AnterosLatin,Georgia,serif}.s4-detail{position:absolute;left:67px;top:1143px}.s4-detail h3{font-size:49px;line-height:1.5;font-weight:700;margin-bottom:18px}.s4-detail p{font-size:29px;line-height:1.8}
+/* 05 / 日报。让日报以报纸的形状出现。 */
+.s5-head{position:absolute;left:60px;top:243px;font-size:88px;line-height:1.42}.s5-head span{display:block;padding-left:90px}.s5-daily{position:absolute;right:73px;top:501px;font:italic 191px/1 AnterosLatin,Georgia,serif;letter-spacing:-5px}.s5-news{position:absolute;left:85px;top:734px;width:905px;height:461px;background:var(--paper);padding:32px 38px;transform:rotate(-3deg)}.s5-news-top{display:flex;justify-content:space-between;border-bottom:2px solid var(--green);padding-bottom:20px;font:19px/1.5 Consolas,'Microsoft YaHei',sans-serif;letter-spacing:2px}.s5-news h3{font-size:48px;line-height:1.5;margin:23px 0 22px;font-weight:700}.s5-topics{display:grid;grid-template-columns:1fr 1fr;gap:17px 24px}.s5-topics div{font-size:28px;line-height:1.6;display:flex;gap:17px}.s5-topics small{font:23px/1.8 AnterosLatin,Georgia,serif}.s5-news-bottom{position:absolute;left:38px;right:38px;bottom:26px;border-top:1px solid var(--green);padding-top:18px;font:19px/1.5 'Microsoft YaHei',sans-serif;letter-spacing:1px}.s5-note{position:absolute;left:67px;top:1240px;font-size:28px;line-height:1.6;letter-spacing:0}
+/* 06 / 工具。像叠开的三份材料，而不是三个功能框。 */
+.s6-spine{position:absolute;left:0;top:0;bottom:0;width:85px;background:var(--green)}.s6-spine span{position:absolute;left:29px;top:69px;writing-mode:vertical-rl;color:var(--paper);font:20px/1.5 Consolas,monospace;letter-spacing:5px}.s6-mast{left:137px}.s6-head{position:absolute;left:130px;top:211px;font-size:130px;line-height:1.33;z-index:3}.s6-head span{padding-left:80px}.s6-quote{position:absolute;right:66px;top:384px;font:360px/1 AnterosLatin,Georgia,serif;color:var(--yellow);z-index:1}.s6-owner{position:absolute;left:144px;top:617px;font:25px/1.7 'Microsoft YaHei',sans-serif;letter-spacing:2px}.s6-file{position:absolute;padding:26px 35px}.s6-file h3{font-size:42px;font-weight:700;line-height:1.4;margin-bottom:9px}.s6-file p{font-size:28px;line-height:1.75;max-width:690px}.s6-file .type{position:absolute;right:34px;top:15px;font:61px/1.2 AnterosLatin,Georgia,serif;opacity:.30}.s6-search{left:141px;top:721px;width:848px;min-height:169px;background:var(--yellow);transform:rotate(-3deg)}.s6-read{left:208px;top:929px;right:-15px;min-height:160px;background:var(--green);color:var(--paper);transform:rotate(2deg)}.s6-write{left:142px;top:1131px;right:64px;min-height:153px;border-top:1px solid var(--green)}.s6-write .type{font-size:49px;right:4px;top:18px}.s6-foot{left:142px;font-size:23px;bottom:41px}
+/* 07 / 可靠。把“不知道”排得坦荡，再给出一张发送凭据。 */
+.s7-head{position:absolute;left:60px;top:231px;font-size:120px;line-height:1.28;letter-spacing:-5px}.s7-head span{padding-left:110px}.s7-side{position:absolute;right:85px;top:254px;writing-mode:vertical-rl;font-size:31px;line-height:1.9;letter-spacing:6px}.s7-ticket{position:absolute;left:73px;top:813px;width:932px;height:252px;background:var(--paper);padding:28px 36px;transform:rotate(-3deg)}.s7-ticket small{font:19px/1.5 Consolas,'Microsoft YaHei',sans-serif;letter-spacing:2px}.s7-ticket h3{font-size:44px;line-height:1.6;margin:23px 0 12px;font-weight:700;letter-spacing:-1px}.s7-ticket p{font-size:27px;line-height:1.7}.s7-status{position:absolute;right:35px;top:27px;border-bottom:1px solid var(--green);font:italic 28px/1.4 AnterosLatin,Georgia,serif;letter-spacing:2px}.s7-proof{position:absolute;left:68px;right:68px;top:1152px;display:grid;grid-template-columns:1fr 1fr;gap:55px}.s7-proof h3{font-size:43px;line-height:1.5;font-weight:700;margin-bottom:12px}.s7-proof p{font-size:28px;line-height:1.8}.s7-proof div{border-top:1px solid var(--green);padding-top:16px}
+/* 08 / An invitation set as the final spread of the yellow-green series. */
+.s8{background:var(--yellow,#f5d933);color:var(--green,#086849);font-family:AnterosSerif,serif}
+.s8-topline{position:absolute;left:64px;right:64px;top:52px;display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid currentColor;padding-bottom:27px;font-size:21px;line-height:1.4;letter-spacing:2px;font-weight:700;z-index:4}
+.s8-topline i{font:500 31px/1 AnterosLatin,Georgia,serif;font-style:normal;letter-spacing:2px;margin-left:15px}
+.s8-topline>span:last-child{font:18px/1.5 Consolas,'Microsoft YaHei',sans-serif;letter-spacing:1.5px}
+.s8-head{font-weight:700;letter-spacing:-5px;line-height:1.16}
+.s8-head span{position:absolute;display:block;white-space:nowrap;z-index:4}
+.s8-line1{left:58px;top:184px;font-size:127px}
+.s8-line2{left:65px;top:354px;font-size:102px}
+.s8-line3{left:300px;top:492px;padding:8px 24px 23px 21px;font-size:140px;background:var(--green,#086849);color:var(--paper,#fff4df);transform:rotate(-3deg)}
+.s8-paper{position:absolute;left:0;right:0;top:699px;height:448px;background:var(--paper,#fff4df);clip-path:polygon(0 0,100% 15%,100% 100%,0 100%);z-index:1}
+.s8-palm{position:absolute;left:730px;top:662px;width:440px;height:433px;background:var(--green,#086849);mask:url('summer-assets/palm.png') center/contain no-repeat;-webkit-mask:url('summer-assets/palm.png') center/contain no-repeat;transform:rotate(-21deg);z-index:2;pointer-events:none}
+.s8-english{position:absolute;left:58px;top:797px;font:italic 500 166px/1.1 AnterosLatin,Georgia,serif;letter-spacing:-5px;white-space:nowrap;z-index:3}
+.s8-care{position:absolute;left:67px;top:1000px;margin:0;font-size:25px;line-height:1.6;letter-spacing:.2px;font-weight:400;z-index:3}
+.s8-invite{position:absolute;left:0;right:0;top:1146px;bottom:0;padding:39px 65px 0;background:var(--green,#086849);color:var(--paper,#fff4df);z-index:4}
+.s8-invite-label{font-size:24px;line-height:1.6;letter-spacing:1px}
+.s8-repo{display:block;position:relative;width:100%;margin-top:22px;padding-bottom:25px;border-bottom:1px solid var(--paper,#fff4df);font:37px/1.4 Consolas,'Courier New',monospace;letter-spacing:-1.3px;color:inherit;text-decoration:none;white-space:nowrap}
+.s8-arrow{position:absolute;right:7px;top:9px;display:block;width:34px;height:34px;border-top:3px solid currentColor;border-right:3px solid currentColor}
+.s8-arrow::after{content:'';position:absolute;right:-3px;top:-3px;width:43px;height:3px;background:currentColor;transform-origin:right center;transform:rotate(-45deg)}
+.s8-colophon{display:flex;justify-content:space-between;align-items:baseline;margin-top:25px;font-size:21px;line-height:1.5;letter-spacing:1px}
+.s8-colophon>span:last-child{font:16px/1.5 Consolas,'Courier New',monospace;letter-spacing:0}
 
-  .grid-bg {
-    position: absolute; inset: 0;
-    background-image:
-      repeating-linear-gradient(0deg, rgba(126,132,168,0.05) 0 1px, transparent 1px 72px),
-      repeating-linear-gradient(90deg, rgba(126,132,168,0.05) 0 1px, transparent 1px 72px);
-  }
-  .frame-outer { position: absolute; inset: 36px; border: 1px solid rgba(126,132,168,0.42); }
-  .frame-inner { position: absolute; inset: 46px; border: 1px solid rgba(126,132,168,0.20); }
+.s8-origin{position:absolute;left:67px;top:742px;font:23px/1.5 AnterosSerif,serif;letter-spacing:2px;z-index:3}.s8-care{font-size:28px}
 
-  .mono { font-family: "JetBrains Mono", monospace; letter-spacing: 3px; }
-  .top-label {
-    position: absolute; top: 84px; left: 96px; right: 96px;
-    display: flex; justify-content: space-between;
-    font-size: 20px; color: var(--ink);
-  }
-  .top-hairline { position: absolute; top: 128px; left: 96px; right: 96px; height: 1px; background: rgba(126,132,168,0.35); }
-  .bottom-hairline { position: absolute; bottom: 128px; left: 96px; right: 96px; height: 1px; background: rgba(126,132,168,0.35); }
-  .bottom-label {
-    position: absolute; bottom: 84px; left: 96px; right: 96px;
-    display: flex; justify-content: space-between;
-    font-size: 18px; color: var(--ink);
-  }
-
-  /* ===== 封面 ===== */
-  .moon {
-    position: absolute; left: 50%; top: 560px; transform: translate(-50%, -50%);
-    width: 700px; height: 700px; border-radius: 50%;
-    background: var(--disc);
-    box-shadow: 0 30px 80px rgba(160,165,197,0.35);
-  }
-  .moon::after {
-    content: ""; position: absolute; inset: 0; border-radius: 50%;
-    background: radial-gradient(circle at 34% 30%, rgba(246,246,248,0.75), transparent 58%);
-  }
-  .palm { position: absolute; left: 50%; top: 552px; transform: translate(-50%, -50%); width: 660px; height: 660px; }
-  .palm path { stroke: var(--ink-deep); stroke-width: 3.4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-  .palm .vein { stroke-width: 2.2; stroke: var(--ink); }
-  .palm circle { fill: var(--blush); stroke: none; }
-  .palm-img {
-    position: absolute; left: 50%; top: 545px; transform: translate(-50%, -50%);
-    width: 620px; mix-blend-mode: multiply;
-  }
-  .greek {
-    position: absolute; top: 920px; left: 0; right: 0; text-align: center;
-    font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 34px; color: var(--ink);
-  }
-  .title {
-    position: absolute; top: 982px; left: 0; right: 0; text-align: center;
-    font-size: 168px; font-weight: 700; letter-spacing: 30px; text-indent: 30px; color: var(--ink-deep);
-    line-height: 1.1;
-  }
-  .title-en {
-    position: absolute; top: 1188px; left: 0; right: 0; text-align: center;
-    font-family: "Cormorant Garamond", serif; font-weight: 600; font-size: 54px;
-    letter-spacing: 14px; text-indent: 14px; color: var(--ink);
-  }
-  .tagline {
-    position: absolute; top: 1256px; left: 0; right: 0; text-align: center;
-    font-size: 30px; color: var(--ink-deep); letter-spacing: 4px;
-  }
-
-  /* ===== 内容卡通用（外援修订版：出血巨盘 / 跳色粗标题 / 图标引导 / 去横线） ===== */
-  .chapter-disc {
-    position: absolute; top: -210px; right: -230px;
-    width: 680px; height: 680px; border-radius: 50%;
-    background: radial-gradient(circle at 42% 42%, var(--disc) 0%, rgba(217,222,242,0.45) 58%, rgba(217,222,242,0) 100%);
-  }
-  .chapter-disc::after {
-    content: ""; position: absolute; left: 18%; top: 58%;
-    width: 26%; height: 26%; border-radius: 50%;
-    border: 1.5px solid rgba(126,132,168,0.5);
-  }
-  .chapter-num {
-    position: absolute; top: 178px; left: 96px;
-    font-family: "Cormorant Garamond", serif; font-weight: 500; font-size: 40px; color: var(--ink);
-  }
-  .chapter-cat {
-    position: absolute; top: 232px; left: 96px;
-    font-size: 20px; color: var(--ink);
-  }
-  .chapter-title {
-    position: absolute; top: 318px; left: 96px; right: 110px;
-    font-size: 76px; font-weight: 700; line-height: 1.42; color: var(--ink-deep);
-    letter-spacing: 2px;
-  }
-  .blocks { position: absolute; left: 96px; right: 110px; }
-  .blk { position: relative; margin-bottom: 64px; }
-  .blk h3 {
-    display: flex; align-items: center; gap: 16px;
-    font-size: 36px; font-weight: 700; color: var(--accent); letter-spacing: 2px; margin-bottom: 14px;
-  }
-  .blk h3 svg {
-    width: 36px; height: 36px; flex: none;
-    stroke: var(--accent); stroke-width: 2.4; fill: none; stroke-linecap: round; stroke-linejoin: round;
-  }
-  .blk h3 svg .fill { fill: var(--accent); stroke: none; }
-  .blk p { font-size: 25px; line-height: 1.85; color: #5c6178; letter-spacing: 1px; padding-left: 52px; }
-  .blk p em { font-style: normal; color: var(--ink-deep); border-bottom: 1px solid var(--blush); }
-  .aside {
-    position: absolute; left: 96px; right: 110px;
-    font-style: italic; font-size: 27px; color: var(--ink); letter-spacing: 2px;
-  }
+body.export{width:1080px;height:1440px;margin:0;background:var(--paper)}body.export .page-head{display:none}body.export .gallery{display:block;max-width:none;width:1080px;padding:0;margin:0}body.export .card{display:none}body.export .card.show{display:block;width:1080px;height:1440px!important}body.export .card-inner{transform:none!important}
+@media(max-width:750px){.page-head{padding:27px 16px 24px;align-items:start;flex-direction:column;gap:12px}.page-head h1{font-size:32px}.gallery{grid-template-columns:minmax(0,1fr);padding:0 16px 24px;gap:20px}.page-head p{font-size:12px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
 </head>
 <body>
+<header class="page-head"><div><h1>Anteros / 棕榈杖</h1><p>盛夏群像 · 八张卡片，认识一位新群友。</p></div><a href="https://github.com/qimingjiu/anteros" target="_blank" rel="noreferrer">把它请进群 ↗</a></header>
+<main class="gallery">
+<section class="card" data-card="1" aria-label="封面：群里多了个记性很好的家伙"><div class="card-inner yellow">
+  <div class="s1-mast"><span class="latin">Anteros</span><span class="small">QQ 群里的新住客</span></div><div class="s1-rule" aria-hidden="true"></div>
+  <h2 class="s1-head display">群里，多了个<br><span class="indent"><em>记性很好</em></span>的家伙。</h2>
+  <div class="s1-window" aria-hidden="true"></div><div class="palm-print s1-palm" aria-hidden="true"></div>
+  <p class="s1-side">聊过的、说好的，<br><span>下次还能接着聊。</span></p>
+  <div class="s1-again latin" aria-hidden="true">Hello, again.</div><div class="s1-name">棕榈杖</div>
+  <footer class="foot rule"><span>记得住话，也接得上话。<br>一个常住群里的 AI 群友。</span><span>SELF-HOSTED<br>MIT OPEN SOURCE</span></footer>
+</div></section>
+<section class="card" data-card="2" aria-label="群聊现场：刚说好的事又被刷走了"><div class="card-inner">
+  <header class="mast"><span class="latin">ANTEROS</span><span class="small">02 / 群聊现场</span></header><div class="chapter">Αʹ / 你们群是不是也这样</div>
+  <h2 class="s2-head display">刚说好的事，<br><em>又被刷走了。</em></h2>
+  <p class="s2-intro">约好的时间，发过的链接，<br>总有人要再问一遍。</p><div class="s2-edge" aria-hidden="true">SCROLL, SCROLL, SCROLL.</div>
+  <div class="s2-ribbon" aria-hidden="true"></div><div class="s2-stream"><small>群聊片段示意 / 非真实截图</small><p class="s2-message">“我们周末到底几点见？”</p><p class="s2-message">“那个链接，谁再发一下……”</p><p class="s2-message">“等等，我翻一下聊天记录。”</p></div>
+  <p class="s2-close">下一次对话，<br><span>能不能接着上次说？</span></p><footer class="foot"><span>群聊在滚，线索也值得留下。</span><span>ANTEROS / 02</span></footer>
+</div></section>
+<section class="card" data-card="3" aria-label="一位长期住在群里的AI群友"><div class="card-inner yellow">
+  <header class="mast"><span class="latin">ANTEROS</span><span class="small">03 / 认识一下</span></header>
+  <h2 class="s3-head display">一位<br><span>群友。</span></h2><p class="s3-side">长期住在 QQ 群里。<br>名字、说话的脾气，<br>由你来设定。</p><div class="palm-print s3-palm" aria-hidden="true"></div>
+  <p class="s3-name-note">A familiar voice in your group.</p><div class="s3-band"><span>记得住</span><i>·</i><span>查得到</span><i>·</i><span>写得出</span></div>
+  <p class="s3-behavior">平时听着，合适时也会接话。<br>@、回复或唤醒词，叫到它就认真回应。</p><footer class="foot"><span>名字和人设，都留给你。</span><span>ANTEROS / 03</span></footer>
+</div></section>
+<section class="card" data-card="4" aria-label="有来源的群聊记忆"><div class="card-inner">
+  <header class="mast"><span class="latin">ANTEROS</span><span class="small">04 / 群聊记忆</span></header><div class="chapter">Γʹ / 留给下一次对话</div>
+  <h2 class="s4-head display">你还记得<br><strong>我那天说的吗？</strong></h2><p class="s4-intro">话题翻过去，约定还能找回来。<br>保留发言人与来源，查得到原话。</p>
+  <div class="s4-demo"><div class="s4-demo-label">对话示意 / 非真实截图</div><p class="s4-question">“我上次说，周六几点见？”</p><div class="s4-turn" aria-hidden="true">↳</div><div class="s4-answer"><small>棕榈杖 / 引用此前消息</small><p>你说的是：周六，下午三点。</p></div></div>
+  <div class="s4-detail"><h3>能查，也能改口。</h3><p>候选与确认分开；可确认，也可作废。<br>群与群分别保存，私聊也单独记。</p></div><footer class="foot"><span>每一条记忆，都留着来处。</span><span>ANTEROS / 04</span></footer>
+</div></section>
+<section class="card" data-card="5" aria-label="按设定时间生成和投递群聊日报"><div class="card-inner yellow">
+  <header class="mast"><span class="latin">ANTEROS</span><span class="small">05 / 群聊日报</span></header><div class="chapter">Δʹ / 今天的群，收好了</div>
+  <h2 class="s5-head display">白天聊到飞起。<br><span>晚上，收成日报。</span></h2><div class="s5-daily" aria-hidden="true">The Daily.</div>
+  <div class="s5-news"><div class="s5-news-top"><span>棕榈杖 / 群聊日报</span><span>栏目版式示意</span></div><h3>一天的热闹，归成一页。</h3><div class="s5-topics"><div><small>01</small>今日话题</div><div><small>02</small>资源分享</div><div><small>03</small>约定待办</div><div><small>04</small>未解决问题</div><div><small>05</small>趣味片段</div><div><small>＋</small>数据范围</div></div><div class="s5-news-bottom">人数与消息量取自实际统计；记录有缺口，就如实标注。</div></div>
+  <p class="s5-note">开启后按设定时间生成 Markdown，私聊送给指定收件人。<br>今天没空爬完楼，也能知道大家聊到了哪儿。</p><footer class="foot"><span>日报默认关闭，开启后按你的安排来。</span><span>ANTEROS / 05</span></footer>
+</div></section>
+<section class="card" data-card="6" aria-label="搜索、阅读文档和生成文件的工具"><div class="card-inner">
+  <div class="s6-spine" aria-hidden="true"><span>ANTEROS / SEARCH, READ, MAKE.</span></div><header class="mast s6-mast"><span class="latin">ANTEROS</span><span class="small">06 / 主人的工具箱</span></header>
+  <div class="s6-quote" aria-hidden="true">”</div><h2 class="s6-head display">你等等，<br><span>我去查。</span></h2><p class="s6-owner">主人可以让它搜资料、读文档、做文件。</p>
+  <div class="s6-file s6-search"><span class="type" aria-hidden="true">WWW</span><h3>搜资料</h3><p>先找资料，再给结论；读到哪儿，就说到哪儿。</p></div>
+  <div class="s6-file s6-read"><span class="type" aria-hidden="true">PDF</span><h3>读文档</h3><p>PDF / DOCX / XLSX，按需阅读与检索。</p></div>
+  <div class="s6-file s6-write"><span class="type" aria-hidden="true">DOC</span><h3>做文件</h3><p>Word / PDF / Markdown，直接发成群文件。</p></div><footer class="foot s6-foot"><span>MCP 还能接上自己的工具。</span><span class="small">ANTEROS / 06</span></footer>
+</div></section>
+<section class="card" data-card="7" aria-label="可靠性与发送状态边界"><div class="card-inner yellow">
+  <header class="mast"><span class="latin">ANTEROS</span><span class="small">07 / 靠谱一点</span></header>
+  <h2 class="s7-head display">不知道，<br><span>就说</span><br>不知道。</h2><p class="s7-side">不装懂，<br>也不乱发。</p>
+  <div class="s7-ticket"><small>发送状态示意 / 回执不明</small><span class="s7-status" aria-hidden="true">Unknown.</span><h3>不确定，就不盲目重发。</h3><p>发送状态会保存；重启后按记录继续处理。</p></div>
+  <div class="s7-proof"><div><h3>不明，就保留不明。</h3><p>协议端确认，才标记确认。<br>不知道的事，不替它编一个结果。</p></div><div><h3>高权限，只认主人。</h3><p>关键操作核对真实身份，<br>引用和转述不能冒名放行。</p></div></div><footer class="foot"><span>可靠，才值得长期住下去。</span><span>ANTEROS / 07</span></footer>
+</div></section>
+<section class="card" data-card="8" aria-label="把棕榈杖请进群"><div class="card-inner s8">
+<!-- Closing invitation / fixed 1080 × 1440. Parent supplies the card-inner wrapper. -->
+<div class="s8-topline"><span>棕榈杖 <i>ANTEROS</i></span><span>08 / 请它入席</span></div>
 
-<!-- 卡 1 · 封面 -->
-<section class="card show" data-card="1">
-  <div class="card-inner">
-    <div class="grid-bg"></div>
-    <div class="frame-outer"></div>
-    <div class="frame-inner"></div>
-    <div class="top-label mono"><span>ANTEROS</span><span>QQ GROUP BOT · MIT</span></div>
-    <div class="top-hairline"></div>
-    <div class="moon"></div>
-    <img class="palm-img" src="palm.png" alt="" onerror="this.style.display='none';document.querySelector('.palm').style.display='block'">
-    <svg class="palm" viewBox="0 0 560 560" style="display:none">
-      <path d="M 196 470 Q 292 296 432 136"/>
-      <path class="vein" d="M 227.8 414.7 Q 189.3 403.2 150.6 410.2"/>
-      <path class="vein" d="M 227.8 414.7 Q 249.2 436.4 272.1 478.1"/>
-      <path class="vein" d="M 242.9 390.0 Q 187.3 370.9 133.3 376.1"/>
-      <path class="vein" d="M 242.9 390.0 Q 273.5 425.5 307.3 479.8"/>
-      <path class="vein" d="M 258.4 365.5 Q 199.2 348.0 142.6 347.1"/>
-      <path class="vein" d="M 258.4 365.5 Q 290.6 400.7 323.8 462.9"/>
-      <path class="vein" d="M 274.4 341.1 Q 209.1 303.3 145.1 292.6"/>
-      <path class="vein" d="M 274.4 341.1 Q 310.7 387.7 349.4 457.1"/>
-      <path class="vein" d="M 290.8 316.9 Q 218.7 297.8 147.0 298.8"/>
-      <path class="vein" d="M 290.8 316.9 Q 326.2 371.2 361.7 443.4"/>
-      <path class="vein" d="M 307.7 292.8 Q 247.3 261.0 186.9 256.4"/>
-      <path class="vein" d="M 307.7 292.8 Q 341.0 332.2 377.4 398.1"/>
-      <path class="vein" d="M 325.1 268.9 Q 271.6 238.2 219.9 229.6"/>
-      <path class="vein" d="M 325.1 268.9 Q 357.7 301.4 389.6 360.8"/>
-      <path class="vein" d="M 342.9 245.1 Q 295.9 216.4 249.2 211.6"/>
-      <path class="vein" d="M 342.9 245.1 Q 363.2 281.2 385.0 335.2"/>
-      <path class="vein" d="M 361.1 221.5 Q 319.6 194.2 278.6 188.0"/>
-      <path class="vein" d="M 361.1 221.5 Q 385.8 246.3 412.2 294.5"/>
-      <path class="vein" d="M 379.9 198.0 Q 347.2 178.2 315.7 184.8"/>
-      <path class="vein" d="M 379.9 198.0 Q 394.3 215.6 411.2 255.5"/>
-      <path class="vein" d="M 399.0 174.6 Q 374.5 157.7 354.9 161.6"/>
-      <path class="vein" d="M 399.0 174.6 Q 409.5 183.7 419.5 215.8"/>
-      <circle cx="432" cy="136" r="7"/>
-      <circle cx="196" cy="470" r="5.5"/>
-    </svg>
-    <div class="greek">Ἀντέρως —— 被回应的爱之神</div>
-    <div class="title">棕榈杖</div>
-    <div class="title-en">A N T E R O S</div>
-    <div class="tagline">被点名，才开口。开口，必有回应。</div>
-    <div class="bottom-hairline"></div>
-    <div class="bottom-label mono"><span>MEMORY · TOOLS · DAILY REPORT</span><span>GITHUB / QIMINGJIU</span></div>
-  </div>
-</section>
+<h2 class="s8-head" aria-label="把它请进群。名字和脾气，你来定。">
+  <span class="s8-line1">把它请进群。</span>
+  <span class="s8-line2">名字和脾气，</span>
+  <span class="s8-line3">你来定。</span>
+</h2>
 
-<!-- 卡 2 · 痛点 -->
-<section class="card" data-card="2">
-  <div class="card-inner">
-    <div class="grid-bg"></div>
-    <div class="frame-outer"></div>
-    <div class="frame-inner"></div>
-    <div class="chapter-disc"></div>
-    <div class="top-label mono"><span>ANTEROS</span><span>01 / 07</span></div>
-    <div class="top-hairline"></div>
-    <div class="chapter-num">Αʹ</div>
-    <div class="chapter-cat mono">它解决什么</div>
-    <div class="chapter-title">群里说好的事，<br>转头就沉进了聊天记录。</div>
-    <div class="blocks" style="top:720px">
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><path d="M6.5 4.8A7 7 0 1 1 5 12"/><path d="M5.5 3.5v4.2h4.2"/></svg>以前</h3>
-        <p>约好的时间没人记得；同一个链接被发了三遍，没人发觉；想找一句"谁说过的话"，要翻几百条消息。</p>
-      </div>
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.2"/><circle class="fill" cx="12" cy="12" r="3"/></svg>现在</h3>
-        <p>它记得<em>谁、在什么时候、说过什么</em>；七天前的旧链接再出现，它会替你翻出原话。</p>
-      </div>
-    </div>
-    <div class="aside" style="bottom:190px">记忆不是历史，是下一次不必重讲。</div>
-    <div class="bottom-hairline"></div>
-    <div class="bottom-label mono"><span>MEMORY</span><span>ANTEROS</span></div>
-  </div>
-</section>
+<div class="s8-paper" aria-hidden="true"></div>
+<div class="s8-palm" aria-hidden="true"></div>
+<p class="s8-origin">Anteros · 被回应的爱</p>
+<div class="s8-english" aria-hidden="true">Come on in.</div>
+<p class="s8-care">也可以开启早安天气、降雨降温提醒。<br>主动消息默认关闭。</p>
 
-<!-- 卡 3 · 是什么 -->
-<section class="card" data-card="3">
-  <div class="card-inner">
-    <div class="grid-bg"></div>
-    <div class="frame-outer"></div>
-    <div class="frame-inner"></div>
-    <div class="chapter-disc"></div>
-    <div class="top-label mono"><span>ANTEROS</span><span>02 / 07</span></div>
-    <div class="top-hairline"></div>
-    <div class="chapter-num">Βʹ</div>
-    <div class="chapter-cat mono">它是谁</div>
-    <div class="chapter-title">一个长期在线的群友。</div>
-    <div class="blocks" style="top:600px">
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><path d="M7.5 4.5h9.5v15.5l-4.8-3.4-4.7 3.4z"/></svg>记得住</h3>
-        <p>话题、约定、每个人说过的话——按群隔离，各群的记忆互不串门。</p>
-      </div>
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M14.8 14.8L20 20"/></svg>查得到</h3>
-        <p>搜索、读网页、读群友发的 PDF 和表格，结论带来源。</p>
-      </div>
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><path d="M5 19.5l1.2-4L15.8 5l3 3L9.2 18.3z"/><path d="M13.8 7l3 3"/></svg>写得出</h3>
-        <p>每天一篇群日报，Markdown 整理好，私聊送到你手上。</p>
-      </div>
-    </div>
-    <div class="aside" style="bottom:190px">TypeScript · Node.js · SQLite · MIT 开源</div>
-    <div class="bottom-hairline"></div>
-    <div class="bottom-label mono"><span>SELF-HOSTED</span><span>ANTEROS</span></div>
-  </div>
-</section>
+<div class="s8-invite">
+  <span class="s8-invite-label">从这里，给群里添一位新住客。</span>
+  <a class="s8-repo" href="https://github.com/qimingjiu/anteros">github.com/qimingjiu/anteros<span class="s8-arrow" aria-hidden="true"></span></a>
+  <div class="s8-colophon"><span>自托管 · MIT 开源</span><span>TypeScript / Node.js / SQLite</span></div>
+</div>
 
-<!-- 卡 4 · 记忆 -->
-<section class="card" data-card="4">
-  <div class="card-inner">
-    <div class="grid-bg"></div>
-    <div class="frame-outer"></div>
-    <div class="frame-inner"></div>
-    <div class="chapter-disc"></div>
-    <div class="top-label mono"><span>ANTEROS</span><span>03 / 07</span></div>
-    <div class="top-hairline"></div>
-    <div class="chapter-num">Γʹ</div>
-    <div class="chapter-cat mono">记忆</div>
-    <div class="chapter-title">谁说的、什么时候说的，<br>改口了也算数。</div>
-    <div class="blocks" style="top:720px">
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><path d="M12 3.5l8.5 4.2-8.5 4.3-8.5-4.3z"/><path d="M3.5 12.5l8.5 4.2 8.5-4.2"/></svg>两级事实</h3>
-        <p>话题结束自动提取事实，先列<em>候选</em>，当事人确认才升级——转述不会被当成本人发言。</p>
-      </div>
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><path d="M4.5 19.5l1.2-4L15.3 6l3 3-9.6 9.5z"/><path d="M13.2 8l3 3"/><path d="M4 22.5h16"/></svg>随时修订</h3>
-        <p>/记忆、/记忆确认、/记忆作废、/搜 关键词，群里就能查、能改、能忘。</p>
-      </div>
-    </div>
-    <div class="aside" style="bottom:190px">归因可追溯：每条记忆都连回原来的消息。</div>
-    <div class="bottom-hairline"></div>
-    <div class="bottom-label mono"><span>MEMORY</span><span>ANTEROS</span></div>
-  </div>
-</section>
-
-<!-- 卡 5 · 日报 -->
-<section class="card" data-card="5">
-  <div class="card-inner">
-    <div class="grid-bg"></div>
-    <div class="frame-outer"></div>
-    <div class="frame-inner"></div>
-    <div class="chapter-disc"></div>
-    <div class="top-label mono"><span>ANTEROS</span><span>04 / 07</span></div>
-    <div class="top-hairline"></div>
-    <div class="chapter-num">Δʹ</div>
-    <div class="chapter-cat mono">日报</div>
-    <div class="chapter-title">每天睡前，<br>群里的事整理好送过来。</div>
-    <div class="blocks" style="top:720px">
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="4.5" width="6.5" height="6.5" rx="1"/><rect x="4.5" y="13.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1"/></svg>六个栏目</h3>
-        <p>今日话题 · 资源分享 · 约定待办 · 未解决问题 · 趣味片段 · 数据范围。</p>
-      </div>
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><path d="M12 3.5l7 2.8v6c0 4.2-3 7.3-7 8.7-4-1.4-7-4.5-7-8.7v-6z"/><path d="M9 12l2.2 2.2 4-4.2"/></svg>不编造</h3>
-        <p>人数与消息量<em>全部来自数据库统计</em>，不交给模型发挥；原子写入，投递失败有限重试，回执不明不乱发。</p>
-      </div>
-    </div>
-    <div class="aside" style="bottom:190px">一篇 Markdown，私聊送达；断过网的日子，会如实标注缺口。</div>
-    <div class="bottom-hairline"></div>
-    <div class="bottom-label mono"><span>DAILY REPORT</span><span>ANTEROS</span></div>
-  </div>
-</section>
-
-<!-- 卡 6 · 工具 -->
-<section class="card" data-card="6">
-  <div class="card-inner">
-    <div class="grid-bg"></div>
-    <div class="frame-outer"></div>
-    <div class="frame-inner"></div>
-    <div class="chapter-disc"></div>
-    <div class="top-label mono"><span>ANTEROS</span><span>05 / 07</span></div>
-    <div class="top-hairline"></div>
-    <div class="chapter-num">Εʹ</div>
-    <div class="chapter-cat mono">工具</div>
-    <div class="chapter-title">查得到资料，<br>做得了文件。</div>
-    <div class="blocks" style="top:720px">
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><path d="M4 5.5c2.8-1.4 5.3-1.4 8 0 2.7-1.4 5.2-1.4 8 0v13c-2.8-1.4-5.3-1.4-8 0-2.7 1.4-5.2 1.4-8 0z"/><path d="M12 5.5v13"/></svg>搜索与阅读</h3>
-        <p>实时信息先搜再答；网页正文阅读逐跳检查 robots，<em>摘要从不冒充全文</em>。</p>
-      </div>
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4"/></svg>生成与接收</h3>
-        <p>Word / PDF / Markdown 直接发成群文件；群友上传的文档，读得懂，标得出页码。</p>
-      </div>
-    </div>
-    <div class="aside" style="bottom:190px">还能挂 MCP：Notion、邮箱、飞书、打车……工具是你的，不是它的。</div>
-    <div class="bottom-hairline"></div>
-    <div class="bottom-label mono"><span>TOOLS &amp; MCP</span><span>ANTEROS</span></div>
-  </div>
-</section>
-
-<!-- 卡 7 · 可靠 -->
-<section class="card" data-card="7">
-  <div class="card-inner">
-    <div class="grid-bg"></div>
-    <div class="frame-outer"></div>
-    <div class="frame-inner"></div>
-    <div class="chapter-disc"></div>
-    <div class="top-label mono"><span>ANTEROS</span><span>06 / 07</span></div>
-    <div class="top-hairline"></div>
-    <div class="chapter-num">Ϛʹ</div>
-    <div class="chapter-cat mono">可靠与边界</div>
-    <div class="chapter-title">没收到回执，<br>就老实说不知道。</div>
-    <div class="blocks" style="top:720px">
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><circle cx="4.5" cy="12" r="1.6"/><circle cx="9.2" cy="12" r="1.6"/><circle cx="14" cy="12" r="1.6"/><circle cx="18.8" cy="12" r="1.6"/><path d="M6.1 12h1.5M10.8 12h1.6M15.6 12h1.6"/></svg>五态状态机</h3>
-        <p>排队 / 在途 / 确认 / 失败 / 不明，全部落库；<em>结果不明不盲目重发</em>，崩溃重启按持久状态续跑。</p>
-      </div>
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><circle cx="8.5" cy="8.5" r="4"/><path d="M11.5 11.5L19.5 19.5"/><path d="M16.5 16.5l2-2M19 19l1.8-1.8"/></svg>权限钉死本人</h3>
-        <p>密钥只住环境变量；高权限工具只认主人本人，伪造的参数和引用都无权放行。</p>
-      </div>
-    </div>
-    <div class="aside" style="bottom:190px">910 个测试用例，从断线重连到"发没发出去不知道"，全都演过。</div>
-    <div class="bottom-hairline"></div>
-    <div class="bottom-label mono"><span>RELIABILITY</span><span>ANTEROS</span></div>
-  </div>
-</section>
-
-<!-- 卡 8 · 陪伴 -->
-<section class="card" data-card="8">
-  <div class="card-inner">
-    <div class="grid-bg"></div>
-    <div class="frame-outer"></div>
-    <div class="frame-inner"></div>
-    <div class="chapter-disc"></div>
-    <div class="top-label mono"><span>ANTEROS</span><span>07 / 07</span></div>
-    <div class="top-hairline"></div>
-    <div class="chapter-num">Ζʹ</div>
-    <div class="chapter-cat mono">陪伴</div>
-    <div class="chapter-title">不等被叫，<br>也会先开口。</div>
-    <div class="blocks" style="top:720px">
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M9 1.8v1.6M3 8h1.6M5 4l1.2 1.2M13 4l-1.2 1.2"/><path d="M8 18.5h9.5a3.8 3.8 0 0 0 .6-7.5 5 5 0 0 0-9.6-1A3.4 3.4 0 0 0 8 18.5z"/></svg>早安天气</h3>
-        <p>每天清晨，今天的雨、降温和穿衣建议提前送到私聊。</p>
-      </div>
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><path d="M6.5 16v-4.5a5.5 5.5 0 0 1 11 0V16l2 3h-15z"/><path d="M10.5 21.5a1.8 1.8 0 0 0 3 0"/></svg>群聊提醒</h3>
-        <p>循环提醒到点在群里 @ 你；跳过、延期、取消，都是一句话的事。</p>
-      </div>
-      <div class="blk">
-        <h3><svg viewBox="0 0 24 24"><path d="M9.5 18.5V6.8L19 4.8v11.4"/><circle cx="7" cy="18.5" r="2.5"/><circle cx="16.5" cy="16.2" r="2.5"/></svg>点歌</h3>
-        <p>报个歌名，它去网易云、Jamendo、ccMixter 替你找。</p>
-      </div>
-    </div>
-    <div class="aside" style="bottom:190px">github.com/qimingjiu/anteros · MIT · 被点名，才开口。</div>
-    <div class="bottom-hairline"></div>
-    <div class="bottom-label mono"><span>PROACTIVE</span><span>ANTEROS</span></div>
-  </div>
-</section>
-
+</div></section>
+</main>
 <script>
-  const params = new URLSearchParams(location.search);
-  const want = params.get("card");
-  const cards = [...document.querySelectorAll(".card")];
-  if (want !== null) {
-    document.body.classList.add("export");
-    cards.forEach(c => c.classList.toggle("show", c.dataset.card === want));
-  }
-  function fit() {
-    if (document.body.classList.contains("export")) return;
-    const scale = Math.min(document.documentElement.clientWidth / 1080, 1);
-    document.querySelectorAll(".card-inner").forEach(el => { el.style.transform = `scale(${scale})`; });
-    document.querySelectorAll(".card").forEach(el => { el.style.height = 1440 * scale + "px"; });
-  }
-  addEventListener("resize", fit); fit();
+const wanted=new URLSearchParams(location.search).get('card');
+const cards=[...document.querySelectorAll('.card')];
+if(wanted!==null&&cards.some(card=>card.dataset.card===wanted)){
+  document.body.classList.add('export');cards.forEach(card=>card.classList.toggle('show',card.dataset.card===wanted));
+}
+function fit(){
+  if(document.body.classList.contains('export'))return;
+  cards.forEach(card=>{const scale=Math.min(card.clientWidth/1080,1);card.style.height=(1440*scale)+'px';card.querySelector('.card-inner').style.transform='scale('+scale+')'});
+}
+addEventListener('resize',fit);document.fonts.ready.then(fit);fit();
 </script>
 </body>
 </html>

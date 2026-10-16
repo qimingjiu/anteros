@@ -52,17 +52,19 @@ test("Notion：重复工具调用、并发和重启使用同一条目，不重�
   assert.equal((await f.make().save(note, privateScope, "same-event")).id, first.id); assert.equal(f.calls.length, 1);
 });
 
-test("Notion：私聊可查本人所有条目，群只查本人同群来源，跨范围get/complete不发请求", async t => {
+test("Notion：笔记本不按会话隔离，主人全量可查并带来源标记；他人的条目不可见", async t => {
   const f = fixture(); t.after(() => f.db.close());
   const priv = await f.notebook.save({ ...note, kind: "todo" }, privateScope, "private");
   await f.notebook.save(note, groupScope, "group");
   await f.notebook.save(note, { ...groupScope, targetId: "4444444" }, "other-group");
   await f.notebook.save(note, { requesterId: "5555555", conversationType: "private", targetId: "5555555" }, "other-owner");
-  assert.equal(f.notebook.list({}, privateScope).length, 3); assert.equal(f.notebook.list({}, groupScope).length, 1);
-  const count = f.calls.length;
-  await assert.rejects(f.notebook.get(priv.id, groupScope), failure("not_found"));
-  await assert.rejects(f.notebook.complete(priv.id, groupScope), failure("not_found"));
-  assert.equal(f.calls.length, count);
+  assert.equal(f.notebook.list({}, privateScope).length, 3);
+  const fromGroup = f.notebook.list({}, groupScope);
+  assert.equal(fromGroup.length, 3, "群聊中也能查到本人从私聊和其他群保存的条目");
+  assert.equal(fromGroup.find(e => e.id === priv.id)?.savedVia?.conversationType, "private");
+  assert.equal(f.notebook.list({}, { requesterId: "5555555", conversationType: "private", targetId: "5555555" }).length, 1);
+  const got = await f.notebook.get(priv.id, groupScope);
+  assert.equal(got.id, priv.id, "跨会话读取本人条目不再被拒绝");
 });
 
 test("Notion：本地查询按标题/内容/类型过滤，不调用工作区搜索", async t => {
@@ -156,12 +158,12 @@ test("Notion：分页最多三页，重复游标停止，拒绝无界遍历", as
   await assert.rejects(f.notebook.get(saved.id, privateScope), failure("invalid_response")); assert.equal(f.calls.length, 4);
 });
 
-test("Notion：调度器完成同步只读两次请求并持久化手工勾选，跨范围不发请求", async t => {
+test("Notion：调度器完成同步只读两次请求并持久化手工勾选，跨会话读取允许", async t => {
   const f = fixture(); t.after(() => f.db.close());
   const saved = await f.notebook.save({ ...note, kind: "todo" }, privateScope, "sync-todo");
   const todo = f.pages.get(saved.id)!.blocks.find((b: any) => b.type === "to_do"); todo.to_do.checked = true;
-  await assert.rejects(f.notebook.completionStatus(saved.id, groupScope), failure("not_found")); assert.equal(f.calls.length, 1);
-  assert.equal(await f.notebook.completionStatus(saved.id, privateScope), true); assert.equal(f.calls.length, 3);
+  assert.equal(await f.notebook.completionStatus(saved.id, groupScope), true, "本人条目跨会话可读"); assert.equal(f.calls.length, 3);
+  assert.equal(await f.notebook.completionStatus(saved.id, privateScope), true, "已持久化的完成状态直接返回，不再发请求");
   assert(f.calls.every(c => c.init?.method !== "PATCH"));
   assert.equal(f.notebook.list({}, privateScope)[0]?.completed, true);
   assert.equal(await f.make().completionStatus(saved.id, privateScope), true); assert.equal(f.calls.length, 3);

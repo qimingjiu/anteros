@@ -36,9 +36,11 @@ test("Notion提醒：保存日期本身不投递，持久调度到期才入QQ ou
   assert.equal(payload.requesterId, OWNER); assert.equal(tasks[0]?.kind, "proactive_notion_reminder");
 });
 
-test("Notion提醒：owner限制、私聊不能换收件人、群必须allowlist且来源相同", async t => {
+test("Notion提醒：owner限制、私聊不能换收件人、群必须allowlist；私聊条目可挂群提醒", async t => {
   const f = fixture(); t.after(() => f.db.close()); const entry = await f.save(); const base = f.input(entry);
-  for (const bad of [{ ...base, requesterId: "8888888", targetId: "8888888" }, { ...base, targetId: "8888888" }, { ...base, conversationType: "group" as const, targetId: "8888888" }, { ...base, conversationType: "group" as const, targetId: GROUP }]) assert.throws(() => f.scheduler.schedule(bad));
+  for (const bad of [{ ...base, requesterId: "8888888", targetId: "8888888" }, { ...base, targetId: "8888888" }, { ...base, conversationType: "group" as const, targetId: "8888888" }]) assert.throws(() => f.scheduler.schedule(bad));
+  const cross = f.scheduler.schedule({ ...base, conversationType: "group" as const, targetId: GROUP });
+  assert.equal(cross.status, "scheduled", "私聊保存的条目也能挂白名单群提醒");
   const inGroup = await f.save(group); const receipt = f.scheduler.schedule(f.input(inGroup, group)); assert.equal(receipt.status, "scheduled");
   f.clock.now += 60_000; await f.scheduler.tick(); assert.equal(f.db.pendingSendTasks(20)[0]?.target_id, GROUP);
   assert.deepEqual(JSON.parse(f.db.pendingSendTasks(20)[0]!.payload).segments[0], { type: "at", data: { qq: OWNER } });
@@ -171,11 +173,11 @@ test("循环提醒：跳过下一次的动作幂等，取消会撤销所有queue
   assert.equal(f.scheduler.status().healthy, true);
 });
 
-test("提醒管理：群不能查私聊/别群，其他主人不能修改，私聊可管理本人群提醒", async t => {
+test("提醒管理：提醒不按会话隔离，本人随处可管；其他人不能修改", async t => {
   const f = fixture(); t.after(() => f.db.close()); const privateEntry = await f.save(); f.scheduler.schedule(f.input(privateEntry));
-  assert.equal(((await f.scheduler.manage({ action: "list" }, group)).reminders as any[]).length, 0);
-  for (const action of ["repeat", "snooze", "skip_next", "cancel"] as const) await assert.rejects(f.scheduler.manage({ action, entryId: privateEntry.id, recurrence: daily, until: DUE }, group));
+  assert.equal(((await f.scheduler.manage({ action: "list" }, group)).reminders as any[]).length, 1, "群里也能列出本人私聊提醒");
   await assert.rejects(f.scheduler.manage({ action: "cancel", entryId: privateEntry.id }, { ...priv, requesterId: "8888888", targetId: "8888888" }));
+  await f.scheduler.manage({ action: "cancel", entryId: privateEntry.id }, group);
   const groupEntry = await f.save(group); f.scheduler.schedule(f.input(groupEntry, group));
   await f.scheduler.manage({ action: "cancel", entryId: groupEntry.id }, priv);
   assert.equal(((await f.scheduler.manage({ action: "list" }, priv)).reminders as any[]).length, 2);

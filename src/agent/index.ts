@@ -1108,7 +1108,7 @@ export class Agent {
         return { status: "saved", entry: notionEntryForModel(entry), qqReminder };
       }),
     }, {
-      name: "notion_list", description: "检索本机器人保存的Notion条目摘要，支持分类与关键词；返回ID、真实链接与内容预览，完整内容用notion_get。群中仅当前主人从本群保存的条目；主人私聊可查自己的全部条目。不搜索未由本工具保存的工作区页面。",
+      name: "notion_list", description: "检索本机器人保存的Notion条目摘要，支持分类与关键词；返回ID、真实链接与内容预览，完整内容用notion_get。主人在任何会话都可查自己的全部条目，不限于当前群或私聊；条目带来源标记。不搜索未由本工具保存的工作区页面。",
       inputSchema: { type: "object", properties: { kind: { type: "string", enum: kinds }, query: { type: "string", maxLength: 200 },
         limit: { type: "integer", minimum: 1, maximum: 15 } }, additionalProperties: false },
       execute: execute("notion_list", args => {
@@ -1118,6 +1118,7 @@ export class Agent {
         const entries = this.notion!.list({ kind: args.kind as NotionKind | undefined, query: args.query as string | undefined,
           limit: args.limit as number | undefined ?? 10 }, scope).map(entry => ({ id: entry.id, url: entry.url, kind: entry.kind,
             title: entry.title, dueAt: entry.dueAt, ...(entry.kind === "todo" || entry.kind === "reminder" ? { completed: entry.completed } : {}), createdAt: entry.createdAt,
+            ...(entry.savedVia ? { savedVia: entry.savedVia.conversationType === "group" ? `群 ${entry.savedVia.targetId}` : "私聊" } : {}),
             contentPreview: entry.content.slice(0, 300), contentTruncated: entry.content.length > 300 }));
         return { status: "ok", entries };
       }),
