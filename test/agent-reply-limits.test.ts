@@ -464,3 +464,22 @@ test("群接话限制：冷却期主人不带@的口语PDF请求仍进入模型�
     assert.equal(f.sent.filter(task => task.payload.kind === "file").length, 0);
   }
 });
+
+test("控制伪调用写成正文时不发出，按控制通道静默", async t => {
+  const f = fixture(t, [{ content: 'conversation_action(action="silent", reason="别人互相聊天，没有@我也没有提问，保持静默")', toolCalls: [], finishReason: "stop" }]);
+  await f.run(f.message("群友之间互相闲聊的话题"));
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.sent.length, 0, "伪工具调用文本绝不能发到群里");
+  assert.equal(f.db.recentSendTasks(20).length, 0);
+});
+
+test("环境答复为纯标点时不发送，后续冷却正常恢复", async t => {
+  const f = fixture(t, [answer("？"), answer("这次有实际内容。")]);
+  await f.run(f.message("隔壁在讨论昨晚的比赛"));
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.sent.length, 0, "纯标点答复按静默处理");
+  t.mock.timers.tick(61_000);
+  await f.run(f.message("新的环境话题"));
+  assert.equal(f.calls.length, 2);
+  assert.equal(f.sent.length, 1);
+});

@@ -21,7 +21,7 @@ import type { ReportEngine } from "../report/index.js";
 import type { OpenMeteoWeather } from "../tools/weather.js";
 import type { ProactiveEngine } from "../proactive/index.js";
 import type { DocumentDelivery } from "../documents/delivery.js";
-import { conversationControlInstruction, detectDirectAttack, mentionsOwner, parseConversationAction, senderText } from "./conversation-control.js";
+import { conversationControlInstruction, detectDirectAttack, mentionsOwner, parseConversationAction, parsePseudoControlCall, senderText } from "./conversation-control.js";
 import { ConversationReplyLimits, type GroupReplyRequest } from "./reply-limits.js";
 import { matchSummonAlias, type SummonAliasMatch } from "./summon-aliases.js";
 import { GroupReplyQueue } from "./group-reply-queue.js";
@@ -617,6 +617,11 @@ export class Agent {
       if (signal?.aborted || replyText === null || this.db.isUserBlocked(m.accountId, m.senderId)) return;
       if (this.flowTasks.has(m.eventKey) && this.tasks?.isCancelled(this.flowTasks.get(m.eventKey)!)) return;
       if (!replyText.trim()) throw new IncompleteReplyError("模型未生成可发送的回复正文");
+      // 环境通道不发送纯标点答复（如占位"？"）；明确召唤仍如实反馈。
+      if (m.groupId && request.kind !== "direct" && !/[\p{L}\p{N}]/u.test(replyText)) {
+        log.info("环境答复为纯标点，按静默处理", { conversationId: m.conversationId, messageId: m.messageId });
+        return;
+      }
       if (m.groupId) {
         const decision = this.replyLimits.canSend(request, replyText);
         if (!decision.allowed) { log.info("重复自动回复已抑制", {conversationId:m.conversationId,messageId:m.messageId,reason:decision.reason}); return; }
@@ -802,6 +807,16 @@ export class Agent {
       const resp = await this.llm.chat(messages, { tools: roundTools, signal, phoneContextReceipt });
       if (signal?.aborted || this.db.isUserBlocked(m.accountId, m.senderId)
         || (this.flowTasks.has(m.eventKey) && this.tasks?.isCancelled(this.flowTasks.get(m.eventKey)!))) return null;
+      // 弱模型会把控制调用写成正文：检出后转回控制通道，绝不当群消息发出。
+      if (resp.toolCalls.length === 0 && resp.content) {
+        const pseudo = parsePseudoControlCall(resp.content);
+        if (pseudo) {
+          log.warn("模型将控制调用写成正文，已按控制通道处理", { conversationId: m.conversationId, messageId: m.messageId });
+          resp.content = "";
+          resp.toolCalls = [{ id: `pseudo:${m.eventKey}:${round}`, name: "conversation_action",
+            arguments: JSON.stringify({ action: pseudo.action, ...(pseudo.reason ? { reason: pseudo.reason } : {}) }) }];
+        }
+      }
       if (resp.toolCalls.length > 0) {
         // Control actions take precedence over content and all side-effecting
         // tools in the same response, even on the final business-tool round.
