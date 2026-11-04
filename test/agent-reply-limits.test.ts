@@ -45,7 +45,7 @@ function fixture(t: TestContext, steps: Step[] = []) {
   cfg.gateway.accountId = "acct";
   cfg.groups.allowlist = ["100", "200"];
   cfg.groups.linkPreview = false;
-  cfg.groups.conversation = { enabled: true, ownerAliases: ["朔朔", "Azhan"] };
+  cfg.groups.conversation = { enabled: true, ownerAliases: ["阿盏", "Azhan"] };
   cfg.tools.enabled = true;
   cfg.tools.ownerIds = [OWNER];
   cfg.admins = [OWNER];
@@ -248,7 +248,7 @@ test("群接话限制：冷却只压环境提及主人，@机器人、引用机�
   await f.run(f.message("找你问个事", { segments: [
     { type: "at", data: { qq: OWNER } }, { type: "text", data: { text: "找你问个事" } },
   ] }));
-  await f.run(f.message("朔朔，刚才那件事你有空吗"));
+  await f.run(f.message("阿盏，刚才那件事你有空吗"));
   await f.run(f.message("Azhan 在吗"));
   await f.run(f.message("私聊我刚才那个问题", { groupId: undefined, conversationId: `private_${MEMBER}` }));
   assert.equal(f.calls.length, 4);
@@ -282,23 +282,24 @@ test("群接话限制：连续对话窗口只对主人开放，群友追问回�
   assert.equal(f.sent.length, 3);
   await f.run(f.message("嗯", { senderId: OWNER }));
   await f.run(f.message("旁人为什么这么说？", { senderId: "23456789" }));
-  assert.equal(f.calls.length, 4, "主人的连续短句进入主模型，群友没有窗口、环境追问受冷却约束");
+  // 2026-10-27：窗口内纯附和不再走直接通道（不"每句都回"），回到环境通道受冷却约束。
+  assert.equal(f.calls.length, 3, "主人的纯附和不再强制进入主模型，群友没有窗口、环境追问受冷却约束");
   assert.equal(f.db.recentSendTasks(20).length, 3);
 });
 
 test("群接话限制：提及主人也遵守环境冷却，重复呼叫不追问，冷却过去后保留新意图", async t => {
   const f = fixture(t, [answer("找她有什么事？"), answer("明天的安排要问她。"), answer("你说一下要找她做什么。")]);
-  await f.run(f.message("朔朔在吗"));
-  await f.run(f.message("朔朔在吗"));
+  await f.run(f.message("阿盏在吗"));
+  await f.run(f.message("阿盏在吗"));
   assert.equal(f.calls.length, 1);
   assert.equal(f.sent.length, 1);
-  await f.run(f.message("朔朔明天有空一起去吗"));
+  await f.run(f.message("阿盏明天有空一起去吗"));
   assert.equal(f.calls.length, 1, "主人提及的意图变化也不能绕过环境冷却");
   t.mock.timers.tick(61_000);
-  await f.run(f.message("朔朔明天有空一起去吗"));
+  await f.run(f.message("阿盏明天有空一起去吗"));
   assert.equal(f.calls.length, 2, "冷却结束后仍保留具体意图");
   t.mock.timers.tick(61_000);
-  await f.run(f.message("朔朔在吗"));
+  await f.run(f.message("阿盏在吗"));
   assert.equal(f.calls.length, 3);
   assert.equal(f.sent.length, 3);
 });
@@ -358,7 +359,7 @@ test("群接话限制：普通群冷却中的主人文档请求仍能不带@生�
 });
 
 test("群接话限制：明确@或引用机器人且正文提主人名，重复同一句仍按直接请求回答", async t => {
-  const content = "朔朔刚才说的这句话你再解释一遍。";
+  const content = "阿盏刚才说的这句话你再解释一遍。";
   const response = "这条明确请求需要解释的是她刚才给出的计划安排。";
   for (const mode of ["at", "quote"] as const) {
     const f = fixture(t, [answer(response), answer(response)]);
@@ -376,18 +377,18 @@ test("群接话限制：明确@或引用机器人且正文提主人名，重复�
 test("群接话限制：暖启动恢复主人提及的环境冷却，等待后新呼叫可处理", async t => {
   for (const mode of ["known_new", "known_repeat", "missing_new"] as const) {
     const f = fixture(t);
-    const old = f.message("朔朔在吗");
+    const old = f.message("阿盏在吗");
     if (mode !== "missing_new") f.db.insertMessage(old);
     f.gateway.enqueueSend({ taskKey: `reply:${old.eventKey}:0`, kind: "reply", conversationType: "group", targetId: "100",
       payload: { kind: "segments", segments: [{ type: "text", data: { text: "找她有什么事？" } }],
         requesterId: MEMBER, accountId: "acct", replyKind: "owner_mention", replyBatch: `reply:${old.eventKey}` },
     });
-    const text = mode === "known_repeat" ? old.textContent : "朔朔明天的聚会还参加吗";
+    const text = mode === "known_repeat" ? old.textContent : "阿盏明天的聚会还参加吗";
     await f.run(f.message(text));
     assert.equal(f.calls.length, 0, `${mode}: 重启后的环境冷却也作用于新的主人提及`);
     assert.equal(f.sent.length, 1);
     t.mock.timers.tick(61_000);
-    await f.run(f.message("朔朔明天的聚会还参加吗"));
+    await f.run(f.message("阿盏明天的聚会还参加吗"));
     assert.equal(f.calls.length, 1, "冷却结束后仍处理新的意图，不把当前正文错记成旧呼叫");
     assert.equal(f.db.recentSendTasks(20).length, 2);
   }

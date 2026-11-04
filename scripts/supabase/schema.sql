@@ -80,6 +80,6 @@ revoke all on function public.phone_presence_ingest(text, jsonb, timestamptz) fr
 grant execute on function public.phone_presence_ingest(text, jsonb, timestamptz) to service_role;
 
 -- Revoke a phone: update public.phone_presence_devices set enabled = false
---   where owner_id = '123456789' and device_id = 'my-phone';
+--   where owner_id = '10001' and device_id = 'owner-phone';
 -- Erase its temporary state: delete from public.phone_presence_state
---   where owner_id = '123456789' and device_id = 'my-phone';
+--   where owner_id = '10001' and device_id = 'owner-phone';

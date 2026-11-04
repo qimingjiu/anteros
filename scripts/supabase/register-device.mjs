@@ -7,7 +7,7 @@ for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], proce
 const owner = args.get("--owner"), device = args.get("--device"), output = args.get("--out-dir");
 if (!/^\d{5,20}$/u.test(owner ?? "") || !/^[A-Za-z0-9_-]{1,64}$/u.test(device ?? "") || !output
   || [...args.keys()].some(key => !["--owner", "--device", "--out-dir"].includes(key))) {
-  throw new Error("Usage: node scripts/supabase/register-device.mjs --owner 123456789 --device my-phone --out-dir <local-private-directory>");
+  throw new Error("Usage: node scripts/supabase/register-device.mjs --owner 10001 --device owner-phone --out-dir <local-private-directory>");
 }
 const directory = path.resolve(output);
 fs.mkdirSync(directory, { recursive: true });

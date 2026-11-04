@@ -15,3 +15,14 @@ persona.md
 social/palm-src/
 social/palm-preview.png
 social/contact-sheet.png
+
+# 私有人格卡、Discord 私有配置、备份与本地前端素材
+personas/
+config.discord.yaml
+*.bak*
+backups/
+web/anteros/*.webp
+web/anteros/*.png
+web/anteros/*.jpg
+web/anteros/*.woff2
+web/anteros.bak*/

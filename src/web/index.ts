@@ -1,4 +1,6 @@
 import http from "node:http";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db/index.js";
 import type { Gateway } from "../gateway/index.js";
@@ -9,6 +11,7 @@ import type { ProactiveEngine } from "../proactive/index.js";
 import { logger } from "../util/logger.js";
 import type { PhoneContextProvider } from "../presence/index.js";
 import type { RuntimeDiagnosticsProvider } from "../diagnostics/index.js";
+import { ApiV2 } from "./api2.js";
 
 const log = logger("web");
 
@@ -29,8 +32,11 @@ export interface WebDeps {
 
 export class StatusPanel {
   private server: http.Server | null = null;
+  private api2: ApiV2;
 
-  constructor(private deps: WebDeps) {}
+  constructor(private deps: WebDeps) {
+    this.api2 = new ApiV2(deps, (req, url) => this.authOk(req, url));
+  }
 
   start(): void {
     const { cfg } = this.deps;
@@ -60,6 +66,19 @@ export class StatusPanel {
     return q === t || h === t;
   }
 
+  private async serveAnteros(res: http.ServerResponse, rel: string): Promise<void> {
+    const root = path.resolve(process.cwd(), "web/anteros");
+    const file = path.resolve(root, decodeURIComponent(rel || "index.html"));
+    if (!file.startsWith(root + path.sep)) { res.writeHead(403); res.end(); return; }
+    const types: Record<string, string> = { ".html": "text/html; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg", ".woff2": "font/woff2", ".ttf": "font/ttf", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8" };
+    try {
+      const buf = await readFile(file);
+      const ext = path.extname(file);
+      res.writeHead(200, { "Content-Type": types[ext] ?? "application/octet-stream", "Cache-Control": ext === ".html" ? "no-store" : "max-age=86400" });
+      res.end(buf);
+    } catch { res.writeHead(404); res.end("not found"); }
+  }
+
   private json(res: http.ServerResponse, code: number, body: unknown): void {
     res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
     res.end(JSON.stringify(body));
@@ -67,6 +86,9 @@ export class StatusPanel {
 
   private async route(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+    if (url.pathname === "/anteros") { res.writeHead(302, { Location: "/anteros/" }); res.end(); return; }
+    if (url.pathname.startsWith("/anteros/")) { await this.serveAnteros(res, url.pathname.slice("/anteros/".length)); return; }
+    if (url.pathname.startsWith("/api/v2") && await this.api2.handle(req, res, url, (r, code, body) => this.json(r, code, body))) return;
     const { db, gateway, mcp, reportEngine } = this.deps;
     const sendTasks = db.recentSendTasks(20);
     const stats = gateway.getStats();
@@ -117,6 +139,8 @@ export class StatusPanel {
         reportsSchedule: this.deps.cfg.reports.schedule,
         documents: { enabled: this.deps.cfg.tools.enabled && (this.deps.cfg.documents?.enabled ?? false), formats: ["md", "docx", "pdf"] },
         features: {...this.deps.cfg.features,historyRetentionDays:this.deps.cfg.memory.rawRetentionDays,
+          historyDailyCleanupTime:this.deps.cfg.memory.rawDailyCleanupTime ?? null,
+          historyCleanupTimezone:this.deps.cfg.timezone,
           incomingFormats:["pdf","docx","xlsx"],morningMode:this.deps.cfg.proactive?.morningMode ?? "clock"},
         notion: {...(this.deps.notion?.status() ?? {enabled:false, configured:false}),
           reminders:this.deps.notionReminders?.status() ?? {enabled:false}},

@@ -12,7 +12,7 @@ import { createPresenceIngestHandler, parsePresenceEvent } from "../scripts/supa
 
 const NOW = Date.parse("2026-10-13T17:00:00Z");
 const OWNER = "10001";
-const DEVICE = "azhan-phone";
+const DEVICE = "owner-phone";
 const TOKEN = "a".repeat(64);
 const config: PhonePresenceConfig = { enabled: true, supabaseUrl: "https://test.supabase.co", serverKey: "sb_secret_server_only",
   ownerId: OWNER, deviceId: DEVICE, requestTimeoutMs: 100, cacheTtlMs: 30000, staleRetentionMs: 86400000 };

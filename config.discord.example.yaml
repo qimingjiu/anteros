@@ -1,0 +1,28 @@
+# Discord 网关示例：只列出与 config.example.yaml 不同的部分，其余段落（model、search、tools 等）照抄 config.example.yaml。
+# 用法：node dist/index.js config.discord.yaml
+timezone: Asia/Shanghai
+persona:
+  name: κόραξ
+  file: persona.md
+database:
+  path: data/discord/bot.db
+gateway:
+  provider: discord
+  account_id: discord
+  discord:
+    token_env: DISCORD_BOT_TOKEN   # Bot token 只放在 .env
+  onebot:
+    endpoint: ws://127.0.0.1:1/    # Discord 模式下不使用
+    backfill_max_pages: 0
+groups:
+  allowlist: []
+  reply_mode: mention_or_reply
+  conversation:
+    enabled: true
+    owner_aliases: ["主人昵称"]
+    wake_aliases: []
+    owner_wake_aliases:
+      - user_id: "000000000000000000"   # 主人的 Discord 用户 ID
+        aliases: ["专属唤醒词"]
+tools:
+  owner_ids: ["000000000000000000"]

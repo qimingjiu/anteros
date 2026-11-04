@@ -40,6 +40,15 @@ test("MCP工具白名单：HTTP与stdio均保留精确名称，空白名单不�
   assert.deepEqual(config.servers[1]!.allowTools,[]);
 });
 
+test("MCP stdio env：仅 stdio 保留非机密字符串映射，非法配置在启动前拒绝", () => {
+  const config = load([{ name: "local", transport: "stdio", command: "node", env: { BASE_URL: "https://newsnow.busiyi.world" } }]);
+  assert.deepEqual(config.servers[0]!.env, { BASE_URL: "https://newsnow.busiyi.world" });
+  for (const env of [null, [], "fixture", 42, { BASE_URL: 42 }, { "BAD-NAME": "fixture" }, { BASE_URL: "fixture\nInjected: true" }]) {
+    assert.throws(() => load([{ name: "bad", transport: "stdio", command: "node", env }]), /env 必须是字符串映射|env 包含非法环境变量/);
+  }
+  assert.throws(() => load([{ ...remote, name: "bad-http", env: { BASE_URL: "https://example.invalid" } }]), /env 仅支持 stdio/);
+});
+
 test("MCP请求头：环境变量提供完整鉴权值，并大小写不敏感地覆盖内联请求头", t => {
   withEnv(t, SECRET);
   const config = load([{ ...remote, headers: { authorization: "obsolete", "X-Client": "fixture" },

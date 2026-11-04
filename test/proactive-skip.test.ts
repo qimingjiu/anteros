@@ -217,13 +217,9 @@ test("主人闭嘴指令：真实Agent路径立即持久化skip，模型只生�
     segments: [{ type: "text", data: { text: "κόραξ，闭嘴" } }], textContent: "κόραξ，闭嘴", status: "active", origin: "live" };
   await agent.onMessage(message);
   assert.equal(f.state().skipNext, true);
-  assert.equal(f.calls.length, 1);
-  assert.deepEqual(f.calls[0]!.tools, []);
-  assert.match(String(f.calls[0]!.messages[0]!.content), /已经生效|不受影响/);
-  const task = f.tasks()[0]!;
-  assert.equal(task.kind, "reply");
-  const content = JSON.parse(task.payload);
-  assert.deepEqual(content.segments.map((s: { type: string }) => s.type), ["text"]);
+  // 2026-10-27：闭嘴改为直接沉默（60秒静默），不再调用模型生成确认，也不发任何消息。
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.tasks().length, 0);
 });
 
 test("主人闭嘴指令：普通聊天、工具权限、否定和转述不被误判；其他人不能skip", async t => {

@@ -50,19 +50,23 @@ function notice(overrides: Record<string, unknown> = {}) {
     time: Math.floor(Date.now() / 1000), group_id: GROUP, user_id: USER, target_id: SELF, ...overrides };
 }
 
-test("戳事件：真实 WS 群通知规范化，私聊 sender_id 保留实际动作人", async t => {
+test("戳事件：真实 WS 群通知规范化，群通知保留非机器人目标，私聊 sender_id 保留实际动作人", async t => {
   const fixture = await protocol(t, () => {});
   await fixture.emit(notice({ group_id: "12345678901234567" }));
   await fixture.emit(notice({ group_id: undefined, user_id: USER, sender_id: SELF, target_id: USER }));
+  await fixture.emit(notice({ event_id: "owner-target", user_id: "12345678", target_id: USER }));
   const pokes = fixture.events.filter((event): event is PokeEvent => event.kind === "poke");
-  assert.equal(pokes.length, 2);
+  assert.equal(pokes.length, 3);
   assert.equal(pokes[0]!.groupId, "12345678901234567");
   assert.equal(pokes[0]!.userId, USER);
   assert.equal(pokes[0]!.targetId, SELF);
   assert.equal(pokes[0]!.conversationId, "group_12345678901234567");
   assert.equal(pokes[1]!.userId, SELF, "反戳回声实际 sender 是机器人，不能误把 peer 当成戳者");
   assert.equal(pokes[1]!.targetId, USER);
-  assert.equal(pokes[1]!.origin, "live");
+  assert.equal(pokes[2]!.userId, "12345678");
+  assert.equal(pokes[2]!.targetId, USER);
+  assert.equal(pokes[2]!.conversationId, `group_${GROUP}`);
+  assert.equal(pokes[2]!.origin, "live");
   assert.equal(fixture.events.filter(event => event.kind === "message").length, 0);
 });
 
@@ -140,7 +144,8 @@ function gatewayFixture(t: TestContext, result: SendResult | Error = { status: "
     async sendGroupMsg() { assert.fail("反戳不能用群文本接口"); },
     async sendPoke(userId, groupId) { calls.push({ userId, groupId }); if (result instanceof Error) throw result; return result; },
   };
-  const gateway = new Gateway(db, provider, { accountId: "acct", backfillMaxPages: 0, backfillPageLimit: 100 });
+  const options = { accountId: "acct", backfillMaxPages: 0, backfillPageLimit: 100, pokeOwnerIds: [USER] };
+  const gateway = new Gateway(db, provider, options);
   const events: GatewayEvent[] = [];
   gateway.onEvent(event => events.push(event));
   const receive = (event: GatewayEvent) => (gateway as unknown as { handleEvent(event: GatewayEvent): void }).handleEvent(event);
@@ -152,6 +157,19 @@ function payload(event: PokeEvent) {
   return { kind: "poke" as const, userId: event.userId, requesterId: event.userId, accountId: event.accountId,
     sourceEventKey: event.eventKey, expiresAt: new Date(Date.parse(event.receivedAt) + 60_000).toISOString() };
 }
+
+test("启动配置：工具所有者传入戳一戳目标过滤，缺省时只回退管理员", async () => {
+  const gatewayModule: Record<string, unknown> = await import("../src/gateway/index.js");
+  const factory = gatewayModule.gatewayOptionsFromConfig;
+  assert.equal(typeof factory, "function");
+  type Factory = (cfg: { gateway: { accountId: string; onebot: { backfillMaxPages: number; backfillPageLimit: number } };
+    tools: { ownerIds?: string[] }; admins: string[] }) => ConstructorParameters<typeof Gateway>[2];
+  const create = factory as Factory;
+  const cfg = { gateway: { accountId: "acct", onebot: { backfillMaxPages: 3, backfillPageLimit: 50 } },
+    tools: { ownerIds: [USER] }, admins: ["999999"] };
+  assert.deepEqual(create(cfg), { accountId: "acct", backfillMaxPages: 3, backfillPageLimit: 50, pokeOwnerIds: [USER] });
+  assert.deepEqual(create({ ...cfg, tools: {}, admins: ["999999"] }).pokeOwnerIds, ["999999"]);
+});
 
 test("戳网关：只派发人戳当前机器人，其他人互戳、自戳、旧通知、黑名单不唤醒", t => {
   const fixture = gatewayFixture(t);
@@ -169,6 +187,22 @@ test("戳网关：只派发人戳当前机器人，其他人互戳、自戳、�
   fixture.receive(poke({ eventKey: "new-poke" }));
   assert.equal(fixture.events.length, 1);
   assert.equal(fixture.db.pokeEventByKey("acct", event.eventKey), undefined);
+});
+
+test("戳网关：群里别人戳主人可派发，自戳、机器人戳和私聊戳主人仍忽略", t => {
+  const fixture = gatewayFixture(t);
+  const event = poke({ eventKey: "owner-poke", userId: "12345678", targetId: USER });
+  for (const ignored of [
+    poke({ eventKey: "owner-self", userId: USER, targetId: USER }),
+    poke({ eventKey: "owner-by-bot", userId: SELF, targetId: USER }),
+    poke({ eventKey: "owner-private", userId: "12345678", targetId: USER, groupId: undefined, conversationId: "private_12345678" }),
+    poke({ eventKey: "members", userId: "12345678", targetId: "87654321" }),
+  ]) fixture.receive(ignored);
+  assert.equal(fixture.events.length, 0);
+  fixture.receive(event);
+  assert.equal(fixture.events.length, 1);
+  assert.equal(fixture.events[0], event);
+  assert.equal(fixture.db.recentMessages(event.conversationId, 10).length, 0);
 });
 
 test("戳网关：来源身份跨 Gateway 重建持久去重，记忆清理会删除来源", t => {

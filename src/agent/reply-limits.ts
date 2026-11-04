@@ -156,6 +156,8 @@ export class ConversationReplyLimits {
       if (last && now - last.at < this.ownerMentionDedupeMs && text === last.text) {
         return { allowed: false, reason: "repeated_owner_mention" };
       }
+      // 有人@或喊主人时必须问一句：不受环境插话冷却与窗口配额限制。
+      return ALLOW;
     }
     if (Number.isFinite(request.receivedAt) && request.receivedAt < state.latestReplyAt) {
       return { allowed: false, reason: "stale_observation" };

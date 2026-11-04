@@ -67,8 +67,9 @@ export interface AppConfig {
   persona: { name: string; prompt: string; file: string };
   database: { path: string };
   gateway: {
-    provider: "onebot";
+    provider: "onebot" | "discord";
     accountId: string;
+    discord?: { tokenEnv: string; token: string };
     onebot: {
       endpoint: string;
       tokenEnv: string;
@@ -86,6 +87,13 @@ export interface AppConfig {
   };
   groups: {
     allowlist: string[];
+    /** Groups where the bot speaks only when @-mentioned (no names, wake words, observer, poke, link notices). */
+    mentionOnly: string[];
+    /** Groups where non-owners get no web_search/read_page (2026-10-30). */
+    ownerOnlySearch?: string[];
+    /** Groups where the bot stays silent unless the owner spoke there recently (2026-10-30). */
+    ownerPresentOnly?: string[];
+    ownerPresentMinutes?: number;
     replyMode: "mention_or_reply";
     linkPreview: boolean;
     linkPreviewCooldownMinutes: number;
@@ -108,10 +116,14 @@ export interface AppConfig {
     requestTimeoutMs: number;
     profiles: ModelProfile[];
     providers?: ModelService[];
+    /** Optional independent image extraction model; never changes the active chat model. */
+    imageReader?: { providerName: string; model: string };
   };
   memory: {
     enabled: boolean;
     rawRetentionDays: number;
+    /** HH:mm in the bot timezone; purge before today's midnight after this time. */
+    rawDailyCleanupTime?: string;
     isolateByGroup: boolean;
     topicGapMinutes: number;
     extraction: "llm" | "rules" | "off";
@@ -238,6 +250,8 @@ export interface McpServerConfig {
   transport: "stdio" | "http";
   command?: string;
   args?: string[];
+  /** 仅 stdio 子进程使用的非机密环境变量。 */
+  env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
   /** Exact upstream tool names; an empty list exposes no tools. */
@@ -305,6 +319,23 @@ function mcpHttpHeaders(raw: Record<string, unknown>, context: string): Record<s
     }
   }
   return Object.fromEntries(headers.values());
+}
+
+/** Non-secret environment values for a stdio MCP child process. */
+function mcpStdioEnv(raw: Record<string, unknown>, context: string): Record<string, string> {
+  const configured = pick(raw, "env");
+  if (configured === undefined) return {};
+  if (!configured || typeof configured !== "object" || Array.isArray(configured)) {
+    throw new Error(`配置错误: ${context}env 必须是字符串映射`);
+  }
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(configured)) {
+    if (typeof value !== "string") throw new Error(`配置错误: ${context}env 必须是字符串映射`);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`配置错误: ${context}env 包含非法环境变量名`);
+    if (/[\r\n\0]/.test(value)) throw new Error(`配置错误: ${context}env 包含非法环境变量值`);
+    out[name] = value;
+  }
+  return out;
 }
 
 function wakeAliasList(value: unknown, context: string): string[] {
@@ -429,7 +460,8 @@ export function loadConfig(configPath: string): AppConfig {
   };
 
   const provider = optString(gw, "provider", "onebot");
-  if (provider !== "onebot") throw new Error(`配置错误: gateway.provider 暂只支持 onebot（收到 ${provider}）`);
+  if (provider !== "onebot" && provider !== "discord") throw new Error(`配置错误: gateway.provider 只支持 onebot 或 discord（收到 ${provider}）`);
+  const dc = (pick(gw, "discord") ?? {}) as Record<string, unknown>;
   const modelProvider = optString(model, "provider", "openai_compatible");
   if (modelProvider !== "openai_compatible" && modelProvider !== "mock") {
     throw new Error(`配置错误: model.provider 只支持 openai_compatible 或 mock（收到 ${modelProvider}）`);
@@ -514,6 +546,27 @@ export function loadConfig(configPath: string): AppConfig {
     profiles: resolvedProfiles,
     providers: resolvedServices,
   };
+  const imageReaderRaw = pick(model, "image_reader");
+  if (imageReaderRaw !== undefined) {
+    if (!imageReaderRaw || typeof imageReaderRaw !== "object" || Array.isArray(imageReaderRaw)) {
+      throw new Error("配置错误: model.image_reader 必须是配置对象");
+    }
+    const reader = imageReaderRaw as Record<string, unknown>;
+    if (typeof reader.provider !== "string" || !reader.provider.trim()) {
+      throw new Error("配置错误: model.image_reader.provider 必须是非空服务商名称");
+    }
+    if (typeof reader.model !== "string" || !reader.model.trim()) {
+      throw new Error("配置错误: model.image_reader.model 必须是非空完整模型 ID");
+    }
+    const service = resolvedServices.find(candidate => candidate.name === reader.provider);
+    if (!service) {
+      throw new Error("配置错误: model.image_reader.provider 必须匹配 model.providers 中已有服务商名称");
+    }
+    if (service.provider !== "mock" && !service.apiKey.trim()) {
+      throw new Error("配置错误: model.image_reader 所选服务商 API key 未配置");
+    }
+    resolvedModel.imageReader = { providerName: reader.provider, model: reader.model };
+  }
   if (modelProvider === "openai_compatible" && (!resolvedModel.baseUrl || !resolvedModel.model)) {
     throw new Error("配置错误: model.base_url 与 model.model 在 provider=openai_compatible 时必填");
   }
@@ -569,14 +622,17 @@ export function loadConfig(configPath: string): AppConfig {
       const name = reqString(s, "name", "tools.mcp.servers[].");
       const transport = optString(s, "transport", "stdio");
       if (transport === "stdio") {
+        const env = mcpStdioEnv(s, `tools.mcp.servers[${name}].`);
         mcpServers.push({
           name,
           transport: "stdio",
           command: reqString(s, "command", `tools.mcp.servers[${name}].`),
           args: strList(s, "args"),
+          ...(pick(s, "env") === undefined ? {} : { env }),
           ...(pick(s,"allow_tools") === undefined ? {} : { allowTools: strList(s,"allow_tools") }),
         });
       } else if (transport === "http") {
+        if (pick(s, "env") !== undefined) throw new Error(`配置错误: tools.mcp.servers[${name}].env 仅支持 stdio`);
         const configuredUrl = optString(s, "url") || envValue(optString(s, "url_env") || undefined);
         if (!configuredUrl) throw new Error(`配置错误: tools.mcp.servers[${name}].url 或 url_env 必须配置`);
         mcpServers.push({
@@ -607,10 +663,14 @@ export function loadConfig(configPath: string): AppConfig {
     persona: { name: optString(persona, "name", ""), prompt: personaPrompt, file: personaFile },
     database: { path: optString(database, "path", "data/bot.db") },
     gateway: {
-      provider: "onebot",
+      provider: provider as "onebot" | "discord",
       accountId: optString(gw, "account_id", "default"),
+      discord: provider === "discord" ? {
+        tokenEnv: optString(dc, "token_env", "DISCORD_BOT_TOKEN"),
+        token: envValue(optString(dc, "token_env", "DISCORD_BOT_TOKEN")),
+      } : undefined,
       onebot: {
-        endpoint: reqString(ob, "endpoint", "gateway.onebot."),
+        endpoint: provider === "discord" ? optString(ob, "endpoint", "ws://127.0.0.1:1/") : reqString(ob, "endpoint", "gateway.onebot."),
         tokenEnv: optString(ob, "token_env", ""),
         accessToken: optString(ob, "access_token") || envValue(optString(ob, "token_env") || undefined),
         reconnectBaseMs: num(ob, "reconnect_base_ms", 1000),
@@ -626,6 +686,10 @@ export function loadConfig(configPath: string): AppConfig {
     },
     groups: {
       allowlist: strList(groups, "allowlist"),
+      mentionOnly: strList(groups, "mention_only"),
+      ownerOnlySearch: strList(groups, "owner_only_search"),
+      ownerPresentOnly: strList(groups, "owner_present_only"),
+      ownerPresentMinutes: num(groups, "owner_present_minutes", 30),
       replyMode: "mention_or_reply",
       linkPreview: bool(groups, "link_preview", true),
       linkPreviewCooldownMinutes: num(groups, "link_preview_cooldown_minutes", 120),
@@ -665,12 +729,13 @@ export function loadConfig(configPath: string): AppConfig {
     memory: {
       enabled: bool(memory, "enabled", true),
       rawRetentionDays: num(memory, "raw_retention_days", 30),
+      rawDailyCleanupTime: optString(memory, "raw_daily_cleanup_time") || undefined,
       isolateByGroup: bool(memory, "isolate_by_group", true),
       topicGapMinutes: num(memory, "topic_gap_minutes", 30),
       extraction: (["llm", "rules", "off"].includes(optString(memory, "extraction", "llm"))
         ? optString(memory, "extraction", "llm")
         : "llm") as AppConfig["memory"]["extraction"],
-      maxFactsPerTopic: num(memory, "max_facts_per_topic", 6),
+      maxFactsPerTopic: num(memory, "max_facts_per_topic", 3),
     },
     reports: reportsCfg,
     documents: {
@@ -877,6 +942,9 @@ export function loadConfig(configPath: string): AppConfig {
       || p.maxMessageChars < 200 || p.maxMessageChars > 2000) throw new Error("配置错误: 主动消息间隔/降温阈值/长度超出范围");
   }
 
+  if (cfg.memory.rawDailyCleanupTime && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(cfg.memory.rawDailyCleanupTime)) {
+    throw new Error("配置错误: memory.raw_daily_cleanup_time 必须使用 HH:mm 格式");
+  }
   if (cfg.reports.enabled && cfg.reports.schedule) {
     try {
       parseCron(cfg.reports.schedule);

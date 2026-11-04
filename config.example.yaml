@@ -4,7 +4,6 @@
 timezone: Asia/Shanghai
 
 # 人设（可选）：prompt 非空时替换默认身份，name 用于让模型知道被 @ 的名字
-# 正文较长时可放进单独文件：persona.file: persona.md（格式参考 persona.example.md，该文件请自行创建并保密）
 persona:
   name: "" # 例如：小雪
   prompt: "" # 例如：你是小雪，一个毒舌但靠谱的群友，喜欢用颜文字，回答简短。
@@ -41,8 +40,8 @@ groups:
     owner_aliases: [] # 主人完整名字/昵称；别人 @主人或提及主人可自动插话，仍受环境冷却/配额
     wake_aliases: [] # 通用机器人别名，任何发送者可召唤；persona.name 始终保留
     owner_wake_aliases: [] # 专属别名绑定平台发送者 QQ，命中时优先于通用别名
-    # - user_id: "123456789"
-    #   aliases: ["昵称甲", "昵称乙"]
+    # - user_id: "10001"
+    #   aliases: ["小渡", "鸦鸦", "黑乌鸦"]
     observer_cooldown_ms: 30000 # 环境自动插话冷却半分钟（含别人提及主人）；机器人召唤始终绕过
     observer_window_ms: 600000
     observer_max_replies: 3 # 普通自动插话十分钟最多三次；召唤与明确追问绕过冷却、不占额度
@@ -72,14 +71,17 @@ model:
   #   models: [model-a, vendor/model-b]  # 只显示白名单；[] 导入全部对话模型
   #   models_url: https://api.example.com/v1/models  # 可省略
   #   model_prefixes: [model-preview]   # 仅在匹配唯一完整 ID 时加入
+  # 图片与文字直接交给当前聊天模型，请选择支持视觉输入的服务商和模型。
+  # 官方 Moonshot 接口自动将原图字节编码成 Base64，不经过独立图片转述。
 
 memory:
   enabled: true
   raw_retention_days: 30 # 原始消息保留天数（0 = 永久）
+  # raw_daily_cleanup_time: "04:00" # 启用后按机器人时区每日清理前一天及更早原文，覆盖滚动保留天数；摘要/记忆保留
   isolate_by_group: true # 按 (账号, 群) 隔离记忆
   topic_gap_minutes: 30 # 消息间隔超过该分钟数即切分话题
   extraction: llm # llm | rules | off  话题结束时如何提取事实
-  max_facts_per_topic: 6
+  max_facts_per_topic: 3 # 严格筛选，每话题最多 3 条；没有合格内容时不存
 
 reports:
   enabled: false
@@ -155,7 +157,7 @@ tools:
     enabled: false # 独立SMTP/IMAP邮箱；固定EMAIL_*私密环境变量，不依赖飞书邮箱授权
   mcp:
     enabled: false
-    connect_timeout_ms: 15000
+    connect_timeout_ms: 60000 # stdio/npx 冷启动可能超过 15 秒
     call_timeout_ms: 120000
     servers: []
     # - name: didi
@@ -191,6 +193,12 @@ tools:
     #   headers_env: { Authorization: REMOTE_MCP_AUTHORIZATION }
     #   # .env 中保存完整请求头值：REMOTE_MCP_AUTHORIZATION="Bearer ..."
     #   # headers_env 覆盖 headers 中同名请求头（大小写不敏感）；环境变量未设置时拒绝启动
+    # - name: newsnow
+    #   transport: stdio
+    #   command: npx
+    #   args: ["-y", "newsnow-mcp-server"]
+    #   env: { BASE_URL: "https://newsnow.busiyi.world" } # 仅 stdio 子进程的非机密环境变量
+    #   allow_tools: [get_hottest_latest_news]
     # - name: my-coffee
     #   transport: http
     #   url: https://gwmcp.lkcoffee.com/order/user/mcp
@@ -247,11 +255,11 @@ presence:
   enabled: false
   allowed_group_ids: [] # owner's messages in these groups may receive temporary phone context
   source: phone_presence_state # device_events for an existing EventTap Android app
-  source_owner: "" # EventTap OWNER label, e.g. azhan; distinct from the owner's QQ
+  source_owner: "" # EventTap OWNER label, e.g. owner; distinct from the owner's QQ
   supabase_url_env: SUPABASE_URL
   server_key_env: SUPABASE_SERVER_KEY # sb_secret_* or legacy service_role; never put it on the phone
   owner_id: "" # explicit tools.owner_ids QQ
-  device_id: "my-phone"
+  device_id: "owner-phone"
   request_timeout_ms: 1500
   cache_ttl_ms: 30000
   stale_retention_ms: 86400000 # past each field TTL: labeled historical; after 24h: omitted

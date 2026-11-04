@@ -265,6 +265,7 @@ const MIGRATIONS: string[] = [
 
 export class Database {
   readonly db: DatabaseSync;
+  private pendingMessagePurgeBefore?: string;
 
   constructor(dbPath: string) {
     fs.mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true });
@@ -436,6 +437,10 @@ export class Database {
   // ---------- messages ----------
 
   insertMessage(m: MessageRecord): { inserted: boolean } {
+    const retainedFrom = this.kvGet("raw_messages_before");
+    if ([retainedFrom, this.pendingMessagePurgeBefore].some(cutoff => cutoff && Date.parse(m.sentAt) < Date.parse(cutoff))) {
+      return { inserted: false };
+    }
     try {
       this.db
         .prepare(
@@ -542,6 +547,31 @@ export class Database {
     return Number(r.changes);
   }
 
+  /** Keep expired backfill out while async summaries are being prepared, without marking cleanup complete. */
+  beginMessagePurge(cutoffIso: string): () => void {
+    const cutoff = new Date(cutoffIso).toISOString();
+    const previous = this.pendingMessagePurgeBefore;
+    this.pendingMessagePurgeBefore = previous && previous > cutoff ? previous : cutoff;
+    return () => { this.pendingMessagePurgeBefore = previous; };
+  }
+
+  /** Delete only raw messages and advance a durable watermark against history re-imports. */
+  purgeMessagesBefore(cutoffIso: string): number {
+    const cutoff = new Date(cutoffIso).toISOString();
+    const previous = this.kvGet("raw_messages_before");
+    if (previous && previous > cutoff) return 0;
+    this.db.exec("SAVEPOINT raw_message_retention");
+    try {
+      const result = this.db.prepare("DELETE FROM messages WHERE sent_at < ?").run(cutoff);
+      this.kvSet("raw_messages_before", cutoff);
+      this.db.exec("RELEASE raw_message_retention");
+      return Number(result.changes);
+    } catch (error) {
+      this.db.exec("ROLLBACK TO raw_message_retention; RELEASE raw_message_retention");
+      throw error;
+    }
+  }
+
   rowToRecord(r: DBRow_Message): MessageRecord {
     return {
       eventKey: r.event_key,
@@ -622,7 +652,7 @@ export class Database {
   }
 
   resetInFlightTasks(): { requeued: number; unknowned: number } {
-    // 文件、文档、报告、主动消息和反戳可能已成功，恢复时不自动重发。
+    // 文件、文档、工具图片、报告、主动消息和反戳可能已成功，恢复时不自动重发。
     const tasks = this.db
       .prepare("SELECT id, kind, payload FROM send_tasks WHERE status = 'in_flight'")
       .all() as { id: number; kind: string; payload: string }[];
@@ -636,7 +666,7 @@ export class Database {
         const payload = JSON.parse(t.payload) as { kind?: unknown } | null;
         oneShotPayload = payload !== null && typeof payload === "object" && (payload.kind === "file" || payload.kind === "poke");
       } catch { /* 坏载荷不能阻断其他任务恢复；普通任务下次执行时会明确失败。 */ }
-      const uncertain = /^(?:report|proactive|document|poke|minimax_)/i.test(t.kind) || oneShotPayload;
+      const uncertain = /^(?:report|proactive|document|poke|minimax_|tool_image)/i.test(t.kind) || oneShotPayload;
       reset.run(uncertain ? "unknown" : "queued", now, t.id);
       if (uncertain) unknowned++;
       else requeued++;

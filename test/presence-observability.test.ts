@@ -5,11 +5,11 @@ import type { PhonePresenceConfig } from "../src/config.js";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const OWNER = "10001", DEVICE = "phone-main";
-const cfg: PhonePresenceConfig = { enabled: true, source: "device_events", sourceOwner: "azhan",
+const cfg: PhonePresenceConfig = { enabled: true, source: "device_events", sourceOwner: "owner",
   supabaseUrl: "https://test.supabase.co", serverKey: "sb_secret_private_server_key", ownerId: OWNER, deviceId: DEVICE,
   cacheTtlMs: 30000, requestTimeoutMs: 100, staleRetentionMs: 86400000 };
 const ownerRequest = { senderId: OWNER, conversationType: "private" as const, purpose: "chat" as const };
-const row = (timestamp: number, values: Record<string, unknown>) => ({ owner: "azhan", device_id: DEVICE,
+const row = (timestamp: number, values: Record<string, unknown>) => ({ owner: "owner", device_id: DEVICE,
   timestamp: new Date(timestamp).toISOString(), ...values });
 
 test("手机诊断：状态和receipt只包含来源、字段数量和时间；群聊、非主人不拉取也不给receipt", async () => {
@@ -35,7 +35,7 @@ test("手机诊断：状态和receipt只包含来源、字段数量和时间；�
   assert.equal(service.status().lastFetch!.httpStatus, 200);
   assert.equal(service.status().supportedFields.length, 8);
   assert.doesNotMatch(JSON.stringify({ receipt: result.receipt, status: service.status() }),
-    /private-network|com\.private|private_server_key|10001|phone-main|azhan|battery_level/);
+    /private-network|com\.private|private_server_key|10001|phone-main|owner|battery_level/);
   const proactive = await service.contextResult({ ...ownerRequest, purpose: "proactive" });
   assert.equal(proactive.receipt!.purpose, "proactive");
   assert.equal(requests, 1);

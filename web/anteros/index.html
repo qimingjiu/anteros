@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#fff3f8">
+<title>Anteros · 安忒洛斯手帐</title>
+<link rel="preload" href="cover.webp" as="image">
+<style>
+@font-face{font-family:WK;src:url(wenkai.woff2) format('woff2');font-display:swap}
+@font-face{font-family:NSD;src:url(nsd-greek-800-italic.woff2);unicode-range:U+0370-03FF,U+1F00-1FFF}
+@font-face{font-family:NSD;src:url(nsd-latin-800-italic.woff2);unicode-range:U+0000-024F}
+@font-face{font-family:NSDL;src:url(nsd-greek-300-italic.woff2);unicode-range:U+0370-03FF,U+1F00-1FFF}
+@font-face{font-family:NSDL;src:url(nsd-latin-300-italic.woff2);unicode-range:U+0000-024F}
+@font-face{font-family:RB;src:url(f-bungee.woff2) format('woff2');font-display:swap}
+@font-face{font-family:RM;src:url(f-rubikmono.woff2) format('woff2');font-display:swap}
+@font-face{font-family:RW;src:url(f-bowlby.woff2) format('woff2');font-display:swap}
+@font-face{font-family:ZK;src:url(f-zkuaile.woff2) format('woff2');font-display:swap}
+@font-face{font-family:ZQ;src:url(f-zqingke.woff2) format('woff2');font-display:swap}
+@font-face{font-family:NB;src:url(f-notoblack.woff2) format('woff2');font-display:swap}
+:root{
+ --paper:#fffdfd;--ink:#4a3a4c;--ink2:#7d6a7c;--hot:#ff4fa3;--hotd:#d6337f;--pk:#f7c8dc;--pk2:#fde4ef;--lil:#bfc3e6;--lil2:#eceef9;--cy:#a9bdf2;--cy2:#e4eafb;--ye:#ffd2e4;--ye2:#fff0f6;--navy:#262c4a;--gemr:#d8324e;--gemb:#3f63c9;
+ --sil:#d9d9e2;--sil2:#eeeef3;--sild:#a9a8b8;--mint:#cfe8d2;--sak:#f2c9d3;--line:rgba(244,130,180,.5);
+ --hand:WK,"LXGW WenKai","Kaiti SC","STKaiti",KaiTi,serif;
+ --body:system-ui,-apple-system,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+ --num:RW,"Arial Black",Impact,sans-serif;
+ --pink:#f2c9d3;--rose:#e6a7b6;--rosed:#b45f77;--leaf:#8fae6e;--head:#66744a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font:14px/1.55 var(--body);color:var(--ink);overflow:hidden;-webkit-tap-highlight-color:transparent;background-color:#fff3f8}
+body::before{content:"";position:fixed;inset:0;z-index:-1;background-color:#fff3f8;
+ background-image:linear-gradient(90deg,rgba(247,170,205,.42) 50%,transparent 50%),linear-gradient(rgba(247,170,205,.42) 50%,transparent 50%);
+ background-size:88px 88px}
+body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(120vw 90vh at 50% 50%,rgba(255,255,255,.28),rgba(255,255,255,0) 70%)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.hand{font-family:var(--hand)}
+/* ---------- cover ---------- */
+#coverWrap{position:fixed;inset:0;display:grid;place-items:center;perspective:2200px;z-index:30;transition:opacity .5s .55s}
+#cover{position:relative;height:min(88vh,926px);aspect-ratio:780/926;max-width:92vw;transform-origin:left center;transition:transform 1.05s cubic-bezier(.6,.02,.3,1);cursor:pointer;
+ border-radius:4px 14px 14px 4px;box-shadow:0 2px 0 #eadde3,0 4px 0 #f3e9ee,0 26px 50px -18px rgba(150,90,120,.35),0 8px 18px -8px rgba(150,90,120,.25);
+ background:url(cover.webp) center/cover;}
+#cover::after{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(90deg,rgba(255,255,255,0) 7%,rgba(255,255,255,.25) 8.5%,rgba(255,255,255,0) 10%)}
+#cover .label{position:absolute;left:24%;right:16%;top:39%;height:28%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+#cover .en{font:italic 800 clamp(26px,4.6vh,48px)/1 NSD,serif;color:#262c4a;letter-spacing:.01em}
+#cover .zh{font:clamp(18px,3.1vh,30px)/1.2 var(--hand);color:var(--rosed);letter-spacing:.32em;margin:.45em 0 .3em .32em}
+#cover .sub{font:clamp(11px,1.5vh,14px)/1.3 var(--hand);color:var(--ink2);letter-spacing:.18em}
+#cover .sub b{font:italic 300 1.1em NSDL,serif;letter-spacing:0;color:#262c4a}
+#cover .ribbon{position:absolute;right:13%;bottom:-3.5%;width:30px;height:16%;background:linear-gradient(#f4c6d6,#eab0c6);clip-path:polygon(0 0,100% 0,100% 100%,50% 86%,0 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.4)}
+#cover .open{position:absolute;left:12%;bottom:6.5%;font:clamp(13px,1.8vh,16px) var(--hand);color:var(--ink);background:rgba(255,255,255,.9);padding:.45em 1em .45em .9em;border-radius:3px;box-shadow:0 0 0 2px #fff,0 2px 5px rgba(170,90,130,.22);display:flex;align-items:center;gap:.5em}
+#cover .open i{width:.6em;height:.6em;border-radius:50%;background:#3a5bd0;box-shadow:0 0 0 3px rgba(58,91,208,.2)}
+#cover .open i.off{background:var(--rose);box-shadow:0 0 0 3px rgba(230,167,182,.25)}
+#cover .tape{position:absolute;left:38%;top:-1.8%;width:24%;height:4.4%;transform:rotate(-2deg)}
+body.opened #cover{transform:rotateY(-112deg)}
+body.opened #coverWrap{opacity:0;pointer-events:none}
+
+#cover .ribbon::after{content:"";position:absolute;left:50%;bottom:-2px;width:0}
+#cover .gem{position:absolute;right:calc(13% + 4px);bottom:calc(-3.5% - 20px);width:22px;height:22px;display:flex;gap:2px;transform:rotate(-8deg)}
+#cover .gem i{flex:1;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;background:radial-gradient(circle at 35% 30%,#fff 0 12%,#e8344e 30%,#8c1027 100%);box-shadow:0 1px 2px rgba(80,20,40,.4)}
+#cover .gem i+i{background:radial-gradient(circle at 35% 30%,#fff 0 12%,#4a74e8 30%,#1b2f86 100%)}
+#cover .cstk{position:absolute;right:5%;top:22%;width:19%;transform:rotate(9deg);filter:drop-shadow(0 4px 5px rgba(150,70,110,.28));pointer-events:none}
+#cover .cboy{position:absolute;left:10%;bottom:11.5%;width:27%;transform:rotate(-4deg);filter:drop-shadow(0 5px 6px rgba(150,70,110,.28));pointer-events:none}
+/* ---------- book ---------- */
+#desk{position:fixed;inset:0;display:grid;place-items:center;opacity:0;transform:scale(.965);transition:opacity .6s .45s,transform .8s .4s cubic-bezier(.3,.6,.3,1);pointer-events:none}
+body.opened #desk{opacity:1;transform:none;pointer-events:auto}
+#book{position:relative;width:min(1340px,calc(100vw - 110px));height:min(860px,calc(100vh - 40px));perspective:2600px}
+.spread{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;filter:drop-shadow(0 18px 22px rgba(190,90,140,.22)) drop-shadow(0 2px 3px rgba(190,90,140,.18))}
+.page{position:relative;overflow:hidden;border:22px solid transparent;border-image:url(torn.webp) 46 fill / 22px stretch}
+.page::before{content:"";position:absolute;inset:6px 4px;pointer-events:none;
+ background:linear-gradient(transparent 33px,var(--line) 33px,var(--line) 34px,transparent 34px) 0 14px/100% 34px}
+.page.L::before{border-left:0}
+.page::after{content:"";position:absolute;top:0;bottom:0;width:2px;background:rgba(255,95,160,.42);pointer-events:none}
+.page.L::after{left:40px}.page.R::after{left:84px}
+.page .shadeG{display:none}
+.inner{position:absolute;inset:0 0 24px 0;overflow-y:auto;overflow-x:hidden;padding:20px 58px 14px 56px;scrollbar-width:thin;scrollbar-color:var(--pk) transparent;z-index:1}
+.page.R .inner{padding:20px 34px 14px 100px}
+.folio{position:absolute;z-index:2;bottom:4px;pointer-events:none;font:600 13px var(--num);color:var(--hot);letter-spacing:.2em}
+.page.L .folio{left:56px}.page.R .folio{right:34px}
+/* metal coil */
+#coil{position:absolute;left:50%;top:6px;bottom:6px;width:124px;margin-left:-62px;z-index:7;pointer-events:none;
+ background:url(ring.webp) center 0/120px 42px;background-repeat:no-repeat space;filter:drop-shadow(0 3px 2px rgba(150,80,120,.25))}
+/* index tabs */
+#tabs{position:absolute;right:-50px;top:58px;display:flex;flex-direction:column;gap:9px;z-index:6}
+.tab{position:relative;width:54px;height:98px;padding-left:14px;border-radius:0 10px 10px 0;font:17px/1 ZK,var(--hand);color:var(--ink);writing-mode:vertical-rl;letter-spacing:.28em;display:flex;align-items:center;justify-content:center;
+ box-shadow:0 0 0 3px #fff,0 4px 8px -3px rgba(190,80,130,.4);transition:transform .25s,width .25s;transform:translateX(-10px)}
+.tab.on{transform:translateX(0);width:60px}
+.tab:hover{transform:translateX(-4px)}.tab.on:hover{transform:none}
+.tc-0{background:var(--hot);color:#fff}.tc-1{background:var(--ye)}.tc-2{background:var(--lil)}.tc-3{background:var(--cy)}.tc-4{background:#fff;color:var(--hotd)}
+.tab.cov{height:74px;background:var(--sil2);color:var(--ink2);font-size:14px}
+/* leaf for page turn */
+.leaf{position:absolute;top:0;bottom:0;z-index:5;transform-style:preserve-3d;pointer-events:none}
+.leaf .face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;overflow:hidden}
+.leaf .back{transform:rotateY(180deg)}
+.leaf .shade{position:absolute;inset:0;pointer-events:none;opacity:0}
+@keyframes turnF{from{transform:rotateY(0)}to{transform:rotateY(-180deg)}}
+@keyframes turnB{from{transform:rotateY(0)}to{transform:rotateY(180deg)}}
+@keyframes shadeIn{0%{opacity:0}50%{opacity:.45}100%{opacity:0}}
+/* settle-in (only on open / turn) */
+.dz{transform:rotate(var(--r,0deg))}
+@keyframes dropIn{0%{opacity:0;transform:translateY(-22px) rotate(calc(var(--r,0deg) - 6deg)) scale(1.04)}70%{opacity:1}100%{opacity:1;transform:rotate(var(--r,0deg))}}
+.page.anim .dz{animation:dropIn .5s cubic-bezier(.25,.9,.35,1.15) both;animation-delay:calc(min(var(--d,0),9) * 70ms + 120ms)}
+.page.anim.late .dz{animation-delay:calc(min(var(--d,0),9) * 60ms + 400ms)}
+
+/* ---------- ransom lettering ---------- */
+.rn{display:inline-flex;flex-wrap:wrap;align-items:center;gap:3px 2px;line-height:1}
+.rn i{font-style:normal;display:inline-block;padding:.12em .16em .1em;min-width:.9em;text-align:center;box-shadow:0 1px 2px rgba(120,50,90,.28);transform:rotate(var(--a)) translateY(var(--y,0));font-size:var(--s,1em)}
+.rn i.sp{background:none!important;box-shadow:none;min-width:.35em;padding:0}
+.ttl{position:relative;margin:4px 0 16px;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.ttl .rn{font-size:40px}
+.ttl .rn.zh{font-size:30px}
+.ttl .chipd{margin-left:auto;align-self:center}
+.chipd{display:inline-block;font:15px/1 RW,var(--num);letter-spacing:.06em;color:#fff;background:var(--hot);padding:6px 10px 5px;border-radius:4px;box-shadow:0 0 0 3px #fff,0 3px 6px -2px rgba(190,60,120,.45);transform:rotate(4deg)}
+.chipd small{font:13px var(--hand);margin-left:5px;letter-spacing:.1em}
+
+/* ---------- galgame screenshot frame ---------- */
+.gal{position:relative;margin:14px auto 26px;max-width:540px;padding:12px 12px 12px;border-radius:12px;
+ background:linear-gradient(160deg,#f7f7fa 0%,#dcdce5 40%,#c9c9d5 60%,#ececf2 100%);
+ box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.9),inset 0 -3px 0 rgba(150,150,170,.35),0 0 0 1.5px #b7b6c6,0 12px 18px -10px rgba(140,70,110,.45)}
+.gal::before{content:"";position:absolute;inset:-16px -18px -18px -16px;z-index:-1;border:16px solid transparent;border-image:url(torn.webp) 46 fill/16px stretch;transform:rotate(calc(var(--r,0deg) * -1.2))}
+.gtab{position:absolute;left:18px;top:-15px;z-index:3;font:italic 800 14px/1 NSD,serif;color:#fff;background:linear-gradient(#ff7cbc,var(--hot));padding:6px 12px 6px;border-radius:7px 7px 2px 2px;box-shadow:0 0 0 2.5px #fff,0 2px 4px rgba(170,50,110,.35);letter-spacing:.03em}
+.gtab b{color:#fff;margin:0 2px;font-style:normal}
+.gimg{position:relative;border-radius:6px;overflow:hidden;aspect-ratio:760/424;background:#fde9f2;box-shadow:inset 0 0 0 2px rgba(150,150,170,.5)}
+.gimg img{display:block;width:100%;height:100%;object-fit:cover}
+.gstk{display:none;position:absolute;right:-14px;top:-30px;width:70px;z-index:4;filter:drop-shadow(0 3px 3px rgba(170,70,120,.25));transform:rotate(8deg)}
+.gdlg{position:relative;margin:-58px 10px 0;z-index:2;background:rgba(255,255,255,.93);border:2.5px solid #fff;border-radius:10px;padding:16px 16px 12px 16px;min-height:72px;
+ box-shadow:0 0 0 2px var(--pk),0 6px 12px -6px rgba(170,60,120,.45)}
+.gdlg .who{position:absolute;left:12px;top:-14px;font:italic 800 15px/1 NSD,var(--hand),serif;background:#fff;color:var(--hotd);padding:5px 12px 5px;border-radius:14px;box-shadow:0 0 0 2px var(--pk)}
+.gdlg p{font:17px/1.55 var(--hand);color:var(--ink);padding-right:58px;overflow-wrap:anywhere}
+.gdlg p b{color:var(--hotd);font-weight:600;font-family:var(--hand)}
+.gdlg .nx{position:absolute;right:16px;bottom:9px;color:var(--hot);font-size:13px;font-style:normal}
+.gdlg .gd{position:absolute;right:10px;top:-13px;font:13px/1 RW,var(--num);background:var(--cy);color:#1f2c66;padding:5px 8px 4px;border-radius:5px;box-shadow:0 0 0 2px #fff;transform:rotate(3deg);letter-spacing:.05em}
+
+/* ---------- stickers / tape ---------- */
+.stk{position:absolute;pointer-events:none;filter:drop-shadow(0 3px 3px rgba(170,70,120,.22));z-index:4}
+.tp{position:absolute;display:block;pointer-events:none;background-size:100% 100%;z-index:3;filter:drop-shadow(0 1px 1px rgba(150,60,100,.2))}
+.tp.st{background-image:url(tapeStripe.webp)}.tp.gi{background-image:url(tapeGing.webp)}
+
+/* ---------- cards ---------- */
+h3{font:500 20px/1.2 ZK,var(--hand);color:var(--ink);letter-spacing:.06em;margin:0 0 10px;display:flex;align-items:baseline;gap:10px}
+h3 small{font:italic 800 13px NSD,serif;color:var(--hot);letter-spacing:.02em}
+h3 em{font:14px var(--hand);font-style:normal;color:var(--ink2);margin-left:auto;letter-spacing:.05em}
+.card{position:relative;background:#fff;border-radius:10px;padding:18px 18px 14px;margin:0 0 24px;
+ box-shadow:0 0 0 3px #fff,0 0 0 5px var(--sil),0 10px 16px -10px rgba(160,70,120,.4)}
+.card.pkc{background:#fff7fb}.card.lic{background:#fbf8ff}.card.cyc{background:#f7f9ff}.card.yec{background:#fffafc}
+.card>.tp{top:-12px;left:50%;width:120px;height:24px;margin-left:-60px;transform:rotate(-3deg)}
+.ctab{position:absolute;left:14px;top:-13px;font:italic 800 12px/1 NSD,serif;color:#fff;background:var(--sild);padding:5px 9px;border-radius:5px 5px 1px 1px;box-shadow:0 0 0 2px #fff;letter-spacing:.04em}
+.ctab.p{background:var(--hot)}.ctab.l{background:#8a8fb8}.ctab.c{background:#4a68c8}
+.note{position:relative;background:#fff;padding:16px 16px 12px;margin:0 0 22px;border:14px solid transparent;border-image:url(torn.webp) 46 fill/14px stretch;filter:drop-shadow(0 6px 8px rgba(170,70,120,.2))}
+.note>.tp{top:-20px;left:12px;width:96px;height:22px;transform:rotate(-5deg)}
+.row{display:flex;align-items:baseline;gap:12px;padding:6px 0;border-bottom:1.5px dashed rgba(244,150,190,.45)}
+.row:last-child{border-bottom:0}
+.row span{color:var(--ink2);flex:none}
+.row b{margin-left:auto;font-weight:600;color:var(--ink);text-align:right;overflow-wrap:anywhere;min-width:0}
+.row b.r{color:var(--hotd)}.row b.g{color:#2f8f6a}
+.chk{display:flex;align-items:flex-start;gap:11px;padding:6px 0;border-bottom:1.5px dashed rgba(244,150,190,.4)}
+.chk:last-child{border-bottom:0}
+.box{flex:none;width:19px;height:19px;margin-top:2px;border:2px solid var(--hot);border-radius:5px;position:relative;background:#fff}
+.box.on{background:var(--pk2)}
+.box.on::after{content:"";position:absolute;left:4px;top:-6px;width:7px;height:14px;border:solid var(--hotd);border-width:0 3px 3px 0;transform:rotate(40deg);border-radius:1px}
+.box.x{border-color:#a982e8}.box.x::after{content:"×";position:absolute;inset:-5px 0 0 2px;font:20px/1 RW,sans-serif;color:#8a5fd6}
+.chk .t{flex:1;min-width:0}
+.chk .t b{font:500 16px var(--hand);color:var(--ink);letter-spacing:.03em}
+.chk .t small{display:block;color:var(--ink2);font-size:12.5px;overflow-wrap:anywhere}
+.chk .v{flex:none;font:15px var(--hand);color:var(--ink2);text-align:right;max-width:52%;overflow-wrap:anywhere}
+.tight .chk{padding:4px 0}.tight .chk .t b{font-size:15px}.tight .chk .v{font-size:13.5px}
+/* starburst numbers */
+.bursts{display:flex;gap:10px;flex-wrap:wrap;justify-content:space-around;margin:0 0 20px}
+.bst{position:relative;width:128px;display:flex;flex-direction:column;align-items:center}
+.bst .bg{position:relative;width:124px;height:124px;display:grid;place-items:center;background:center/contain no-repeat}
+.bst .bg b{font:27px/1 var(--num);color:#3a1f3d;letter-spacing:.01em;transform:rotate(-4deg)}
+.bst .bg b.l5{font-size:18px}.bst .bg b.l6{font-size:16px}
+.bst.p .bg{background-image:url(burstPink.webp)}.bst.p .bg b{color:#fff;text-shadow:0 1px 0 #c22f74,0 0 6px rgba(160,20,80,.45)}
+.bst.c .bg{background-image:url(burstBlue.webp)}.bst.c .bg b{color:#fff;text-shadow:0 1px 0 #1b2f86,0 0 6px rgba(20,30,90,.45)}.bst.y .bg{background-image:url(burstSilver.webp)}.bst.y .bg b{color:var(--navy)}
+.bst span{margin-top:-6px;font:15px/1 ZK,var(--hand);background:#fff;padding:5px 10px 4px;border-radius:12px;box-shadow:0 0 0 2px var(--pk);letter-spacing:.12em;color:var(--ink)}
+.mono{font-variant-numeric:tabular-nums}
+.gauge{margin:6px 0 14px}
+.gauge .l{display:flex;justify-content:space-between;font-size:13px;color:var(--ink2);margin-bottom:5px}
+.gauge .l b{font:600 15px var(--hand);color:var(--ink)}
+.gauge .t{height:18px;background:#fff;border-radius:9px;position:relative;overflow:hidden;box-shadow:inset 0 0 0 2px var(--sil),inset 0 2px 3px rgba(150,150,170,.25)}
+.gauge .t i{position:absolute;left:0;top:0;bottom:0;border-radius:9px;background:url(tapeStripe.webp) 0 50%/auto 100% repeat-x;box-shadow:inset 0 0 0 2px rgba(255,255,255,.6)}
+.gauge.p .t i{background:linear-gradient(#e6d6fd,var(--lil))}
+.gauge.c .t i{background:linear-gradient(#a6f0f7,var(--cy))}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#3cc49a;margin-right:6px;vertical-align:1px;box-shadow:0 0 0 2px #fff,0 0 0 3px rgba(60,196,154,.4)}
+.dot.off{background:var(--hot);box-shadow:0 0 0 2px #fff,0 0 0 3px rgba(255,79,163,.4)}
+.empty{font:15px var(--hand);color:var(--ink2);padding:10px 0}
+.toc a{display:flex;align-items:center;gap:8px;padding:7px 0;color:var(--ink);text-decoration:none;font:17px ZK,var(--hand);cursor:pointer;border-bottom:1.5px dashed rgba(244,150,190,.45)}
+.toc a:last-child{border-bottom:0}
+.toc a i{flex:1;height:2px;background:repeating-linear-gradient(90deg,var(--pk) 0 10px,transparent 10px 16px);min-width:20px}
+.toc a em{font:13px var(--num);font-style:normal;color:var(--hot)}
+.toc a:hover{color:var(--hotd)}
+.log{list-style:none}
+.log li{display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:baseline;padding:4px 0;border-bottom:1.5px dashed rgba(244,150,190,.4)}
+.log li:last-child{border-bottom:0}
+.log time{font:14px var(--num);color:var(--ink2);letter-spacing:.02em}
+.log .w{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.log .w b{font-weight:600}
+.log .w small{color:var(--ink2);margin-left:6px}
+.pill{font:13px/1 var(--hand);padding:4px 9px 3px;border-radius:20px;background:var(--cy2);color:#1f6f78;letter-spacing:.1em;white-space:nowrap;box-shadow:inset 0 0 0 1.5px #9ee6ee}
+.pill.f{background:var(--pk2);color:var(--hotd);box-shadow:inset 0 0 0 1.5px #f8a9cc}.pill.q{background:var(--cy2);color:#2a3d8a;box-shadow:inset 0 0 0 1.5px #b9c8f2}
+.gcard .nm{font:500 24px/1.2 ZK,var(--hand);color:var(--ink);overflow-wrap:anywhere}
+.gcard .id{font-size:12.5px;color:var(--ink2);margin:2px 0 12px}
+.gnums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.gnums div{text-align:center;border-radius:8px;padding:8px 4px 6px;font-size:12px;color:var(--ink2);box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--sil)}
+.gnums div:nth-child(1){background:var(--pk2)}.gnums div:nth-child(2){background:var(--lil2)}.gnums div:nth-child(3){background:var(--cy2)}
+.gnums b{display:block;font:23px/1.15 var(--num);color:var(--ink)}
+.bars{display:flex;align-items:flex-end;gap:3px;height:52px;padding:0 2px;border-bottom:2px solid var(--sild)}
+.bars i{flex:1;background:var(--lil);border-radius:3px 3px 0 0;min-height:2px;opacity:.85}
+.bars i.now{background:var(--hot);opacity:1}
+.bx{display:flex;justify-content:space-between;font:12px var(--hand);color:var(--ink2);margin:3px 0 10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{font-size:12.5px;background:#fff;border-radius:14px;padding:2px 10px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-shadow:0 0 0 1.5px var(--pk)}
+.chips span b{font-weight:700;color:var(--hotd);margin-left:4px}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;align-items:end;height:124px}
+.week div{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;font:12px var(--hand);color:var(--ink2)}
+.week i{width:70%;max-width:32px;border-radius:6px 6px 0 0;background:linear-gradient(#e3d3fb,var(--lil));margin:3px 0 4px;min-height:3px}
+.week div.today i{background:linear-gradient(#ff9ccb,var(--hot))}
+.week b{font:14px var(--num);color:var(--ink)}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.tile{position:relative;border-radius:10px;padding:9px 10px 8px;min-width:0;background:#fff;box-shadow:0 0 0 3px #fff,0 0 0 4.5px var(--sil),0 4px 8px -4px rgba(160,70,120,.35)}
+.tile:nth-child(4n+1){background:var(--pk2)}.tile:nth-child(4n+2){background:var(--lil2)}.tile:nth-child(4n+3){background:var(--cy2)}.tile:nth-child(4n){background:var(--ye2)}
+.tile .n{font:600 15px/1.25 var(--body);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:34px}
+.tile .i{font-size:11.5px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px}
+.tile .c{position:absolute;right:7px;top:6px;min-width:28px;height:23px;padding:0 6px;border-radius:12px;display:flex;align-items:center;justify-content:center;font:14px var(--num);color:#fff;background:var(--hot);box-shadow:0 0 0 2px #fff}
+.tile.off .c{background:var(--sild);font:12px var(--hand)}
+.tile.off{opacity:.8}
+.topic{position:relative;padding:11px 0 11px 22px;border-bottom:1.5px dashed rgba(244,150,190,.45)}
+.topic:last-child{border-bottom:0}
+.topic::before{content:"";position:absolute;left:0;top:15px;width:14px;height:14px;background:url(spkPink.webp) center/contain no-repeat}
+.topic .h{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.topic .h b{font:500 17px ZK,var(--hand);color:var(--ink)}
+.topic .h span{font-size:12.5px;color:var(--ink2)}
+.topic p{margin-top:4px;color:#5b4a5c;font-size:13.5px;line-height:1.65}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 22px}
+.memo{font:15px/1.6 var(--hand);color:var(--ink)}
+.upd{font:13px var(--hand);color:var(--ink2);letter-spacing:.1em}
+
+/* ---------- phone ---------- */
+@media (max-width:820px){
+ body{overflow:auto}
+ #desk{position:static;display:block;padding:0 8px 26px;transform:none}
+ body:not(.opened) #desk{display:none}
+ #book{width:100%;height:auto;perspective:1800px;padding-top:10px}
+ #coil{left:14px;right:14px;top:58px;bottom:auto;width:auto;height:60px;margin:0;background:url(ringH.webp) 0 center/27px 60px;background-repeat:space no-repeat}
+ .spread{position:relative;display:block;margin-top:28px}
+ .page{overflow:visible;border-width:16px;border-image-width:16px}
+ .page::after{display:none}
+ .page.R{margin-top:-10px}
+ .inner,.page.R .inner{position:relative;inset:auto;overflow:visible;padding:22px 10px 34px}
+ .page.L .inner{padding-top:30px}
+ .folio{bottom:6px}.page.L .folio{left:12px}.page.R .folio{right:12px}
+ #tabs{position:sticky;left:auto;right:auto;top:0;flex-direction:row;gap:6px;padding:10px 4px 6px;margin:0;background:linear-gradient(#fff3f8 82%,rgba(255,243,248,0));z-index:20;justify-content:center}
+ .tab{writing-mode:horizontal-tb;width:auto;flex:1;max-width:84px;height:40px;padding:3px 0 0;border-radius:10px;transform:translateY(3px);font-size:15px;letter-spacing:.1em;box-shadow:0 0 0 2.5px #fff,0 3px 6px -3px rgba(190,80,130,.4)}
+ .tab.on{width:auto;transform:translateY(-2px)}.tab:hover{transform:translateY(1px)}.tab.on:hover{transform:translateY(-2px)}
+ .tab.cov{height:40px;flex:.8;font-size:13px}
+ .ttl .rn{font-size:32px}.ttl .rn.zh{font-size:24px}
+ .gal{margin:16px 6px 24px;padding:9px}
+ .gal::before{inset:-12px -12px -14px -12px;border-width:12px;border-image-width:12px}
+ .gdlg{margin:-34px 4px 0;padding:15px 12px 10px}
+ .gdlg p{font-size:15.5px;padding-right:20px}
+ .bst{width:110px}.bst .bg{width:100px;height:100px}.bst .bg b{font-size:23px}.bst .bg b.l5{font-size:19px}.bst .bg b.l6{font-size:16px}
+ .bursts{gap:4px}
+ .two{grid-template-columns:1fr;gap:0}
+ .note.mshift{margin-left:auto!important;margin-right:auto!important}
+ .pgrid{gap:0 14px}
+ .tiles{grid-template-columns:repeat(2,1fr);gap:12px}
+ .stk.hide-m{display:none}
+ .gstk{display:block;top:38px;right:-12px;width:62px}
+ .ttl .chipd{margin-left:0}
+ .pgrid{grid-template-columns:1fr}
+ .stk.m-sm{transform:scale(.7)!important}
+}
+body.instant #coverWrap,body.instant #desk,body.instant #cover{transition:none!important}
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01s!important;animation-duration:.01s!important}}
+
+.tape{display:block;background-size:100% 100%;mix-blend-mode:multiply;pointer-events:none}.tape.check{background-image:url(tapeCheck.webp)}
+</style></head>
+<body>
+<div id="coverWrap"><div id="cover" role="button" aria-label="翻开手帐">
+ <i class="tape check"></i>
+ <div class="label"><div class="en">Anteros</div><div class="zh">安忒洛斯</div><div class="sub"><b>κόραξ</b> 的手帐 · <span data-k="year">2026</span></div></div>
+ <div class="open"><i id="covDot"></i><span id="covState">正在翻找今天的记录…</span></div>
+ <div class="ribbon"></div><div class="gem"><i></i><i></i></div>
+ <img class="cstk" src="kCrow.webp" alt=""><img class="cboy" src="hBook.webp" alt="">
+</div></div>
+
+<div id="desk"><div id="book">
+ <nav id="tabs"></nav>
+ <div class="spread" id="spread"><div class="page L"><div class="inner"></div><div class="folio"></div></div><div class="page R"><div class="inner"></div><div class="folio"></div></div></div>
+ <div id="coil"></div>
+</div></div>
+
+<script>
+/* ---------------- data layer (same /api/v2 routes as ui8/ui9, mock fallback) ---------------- */
+const MOCK={
+ overview:{uptimeMs:36000000,today:"2026-11-03",counts:{messagesToday:1215,botRepliesToday:198,topics:145,memories:2,groupsEnabled:3,blockedUsers:0},model:{active:"MiniMax / MiniMax-M3.1-Flash"},mcp:{total:12,connected:12},connection:{connection:"connected",login:"online",selfId:"90001",reconnectCount:0},stats:{receivedTotal:240,sentConfirmed:31,sentFailed:0,sentUnknown:0,recalled:1},queue:0},
+ groups:{groups:[{groupId:"40002",name:"示例群 A",memberCount:53,messagesToday:837,botRepliesToday:120,topics:80,topSendersToday:[{nickname:"阿盏",messages:210},{nickname:"群友乙",messages:96}]},{groupId:"40001",name:"示例群 B",memberCount:25,messagesToday:374,botRepliesToday:70,topics:50},{groupId:"3",name:"示例小群",memberCount:5,messagesToday:0,botRepliesToday:0,topics:4}]},
+ mcp:{total:12,connected:12,servers:[{name:"feishu",connected:true,tools:270,serverInfo:"Feishu/Lark MCP Server"},{name:"mcd-mcp",connected:true,tools:36},{name:"amap",connected:true,tools:15},{name:"didi",connected:true,tools:13},{name:"eye",connected:true,tools:13},{name:"flovia",connected:true,tools:12},{name:"my-coffee",connected:true,tools:8},{name:"xnews",connected:true,tools:5},{name:"minimax",connected:true,tools:3},{name:"music",connected:true,tools:2},{name:"newsnow",connected:true,tools:1},{name:"news-search",connected:true,tools:1}]},
+ system:{host:{cpus:8,loadAvg:[0.3,0.25,0.2],uptimeSec:860000,memory:{totalBytes:8000000000,availableBytes:4000000000},disk:{usedPct:44.7}},process:{rssBytes:260e6,dbBytes:90e6,node:"v22"},services:[{unit:"qq-group-bot",active:"active"},{unit:"qq-discord-bot",active:"active"},{unit:"ncm-api",active:"active"},{unit:"xnews-mcp",active:"active"},{unit:"docker",active:"active"},{unit:"tailscaled",active:"active"},{unit:"sing-box",active:"active"}]},
+ tasks:{recent:[{kind:"reply",status:"confirmed",conversationType:"group",targetId:"40002",createdAt:"12:47"},{kind:"minimax_image",status:"confirmed",conversationType:"group",targetId:"40002",createdAt:"12:45"},{kind:"reply",status:"confirmed",conversationType:"private",createdAt:"12:35"},{kind:"proactive_morning",status:"confirmed",conversationType:"private",createdAt:"07:00"},{kind:"reply",status:"failed",conversationType:"group",targetId:"40001",createdAt:"03:14"}]},
+ activity:{days:[]},topics:{topics:[]},models:{providers:[]},sidecars:{probes:[],containers:[]},downtime:{total:0,downtime:[]},proactive:{proactive:{}},memories:{recent:[]}
+};
+const KIND={reply:"回复",document_file:"发文件",poke:"戳一戳",notice:"通知",command_reply:"指令",proactive_notion_reminder:"提醒",minimax_image:"画图",minimax_speech:"语音",proactive_morning:"早安",proactive_random:"主动问候",proactive_task_progress:"任务进度",link_preview:"链接预览",daily_report:"日报"};
+let LIVE=false;
+const api=async r=>{try{const x=await fetch('/api/v2/'+r,{cache:'no-store'});if(!x.ok)throw 0;const j=await x.json();LIVE=true;return j}catch(e){return MOCK[r.split('?')[0]]||{}}};
+const D={};
+const P2=n=>String(n).padStart(2,'0');
+const T=s=>{if(!s)return null;let m=/(\d{4})-(\d{2})-(\d{2}) (\d{1,2}):(\d{2}) (AM|PM)/.exec(s);
+ if(m){const h=(+m[4])%12+(m[6]==='PM'?12:0);return{d:m[2]+'-'+m[3],t:P2(h)+':'+m[5],day:m[1]+'-'+m[2]+'-'+m[3]}}
+ if(/^\d{1,2}:\d{2}$/.test(s))return{d:'',t:s,day:''};
+ const d=new Date(s);if(isNaN(d))return{d:'',t:String(s),day:''};
+ const z=new Date(d.getTime()+8*3600e3);return{d:P2(z.getUTCMonth()+1)+'-'+P2(z.getUTCDate()),t:P2(z.getUTCHours())+':'+P2(z.getUTCMinutes()),day:z.toISOString().slice(0,10)}};
+const today=()=>D.ov?.today||new Date(Date.now()+8*3600e3).toISOString().slice(0,10);
+const hm=s=>{const x=T(s);if(!x)return '—';return (!x.day||x.day===today())?x.t:(x.d+' '+x.t)};
+const esc=v=>String(v??'—').replace(/（你自己）|\(你自己\)|“你自己”/g,'κόραξ').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>Number(n||0).toLocaleString('en-US');
+const GB=b=>(b/1073741824).toFixed(1)+' G',MB=b=>Math.round(b/1048576)+' M';
+const dur=s=>s>=86400?Math.floor(s/86400)+'天'+Math.floor(s%86400/3600)+'时':s>=3600?Math.floor(s/3600)+'时'+P2(Math.floor(s%3600/60))+'分':Math.floor(s/60)+'分';
+const upt=ms=>dur(Math.floor((ms||0)/1000));
+const gname=id=>{const g=(D.gr?.groups||[]).find(x=>x.groupId==id);return g?g.name:(id==='10001'?'阿盏 · 私聊':(id||'—'))};
+const WD='日一二三四五六';
+
+async function loadCore(){
+ const [ov,gr,mc,sy,ta]=await Promise.all(['overview','groups','mcp','system','tasks?limit=30'].map(api));
+ Object.assign(D,{ov,gr,mc,sy,ta});
+}
+async function loadMore(){
+ const [ac,tp,md,sc,dt,pr,me]=await Promise.all(['activity?days=7','topics?limit=6','models','sidecars','downtime?limit=6','proactive','memories'].map(api));
+ Object.assign(D,{ac,tp,md,sc,dt,pr,me});
+}
+
+/* ---------------- building blocks ---------------- */
+const R=(a,b,c)=>`<div class="row"><span>${esc(a)}</span><b class="${c||''}">${esc(b)}</b></div>`;
+const tp=(c,st='')=>`<i class="tp ${c}" style="${st}"></i>`;
+const chk=(on,t,sub,v)=>`<div class="chk"><i class="box ${on===true?'on':on===false?'x':''}"></i><div class="t"><b>${t}</b>${sub?`<small>${sub}</small>`:''}</div>${v!=null?`<div class="v">${v}</div>`:''}</div>`;
+const gauge=(l,pct,txt,c='')=>`<div class="gauge ${c}"><div class="l"><span>${l}</span><b>${txt}</b></div><div class="t"><i style="width:${Math.max(4,Math.min(100,pct||0))}%"></i></div></div>`;
+let DZ=0;const dz=(r=0)=>`dz" style="--r:${r}deg;--d:${DZ++}`;
+const stk=(src,st,cls='',r=0)=>`<img class="stk dz ${cls}" src="${src}" alt="" style="${st};--r:${r}deg;--d:${DZ++}">`;
+const burst=(n,l,c='p',r=0)=>{const s=String(n);return `<div class="bst ${c} ${dz(r)}"><div class="bg"><b class="mono ${s.length>=6?'l6':s.length>=5?'l5':''}">${s}</b></div><span>${l}</span></div>`};
+/* ransom-note lettering: every glyph on its own paper block */
+const RCOL=[['#ff4fa3','#fff'],['#ffffff','#262c4a'],['#dedfe8','#262c4a'],['#262c4a','#fff'],['#ffd0e6','#7a1f4f'],['#ffffff','#e2317f'],['#c8344e','#fff'],['#f7c8dc','#262c4a'],['#3f63c9','#fff']];
+const LF=['RB','RW','RM','NSD','Georgia'],ZF=['ZK','NB','ZQ','WK'];
+function rn(txt,seed=1,cls=''){
+ let k=0;return `<span class="rn ${cls}">`+[...txt].map(ch=>{
+  if(ch===' ')return '<i class="sp"></i>';
+  const h=(k*7+seed*13+ch.charCodeAt(0))%97;k++;
+  const [bg,fg]=RCOL[(h+k)%RCOL.length];const cj=/[\u3000-\u9fff]/.test(ch);
+  const ff=cj?ZF[h%ZF.length]:LF[h%LF.length];
+  const a=((h%9)-4)*1.7,y=((h%5)-2)*1.5,s=0.86+(h%4)*0.07;
+  return `<i style="background:${bg};color:${fg};font-family:${ff},sans-serif;font-weight:${ff==='NSD'?800:400};${ff==='NSD'?'font-style:italic;':''}--a:${a.toFixed(1)}deg;--y:${y}px;--s:${s.toFixed(2)}em">${esc(ch)}</i>`}).join('')+'</span>';
+}
+const dchip=()=>{const d=new Date(today()+'T12:00:00+08:00');return `<span class="chipd">${today().slice(5).replace('-','/')}<small>星期${WD[d.getUTCDay()]}</small></span>`};
+const title=(en,zh,seed)=>`<div class="ttl ${dz(0)}">${rn(en,seed)}${rn(zh,seed+3,'zh')}${dchip()}</div>`;
+/* galgame screenshot frame: real data rides in the dialogue box */
+const gal=(o)=>`<figure class="gal ${dz(o.r||-1.5)};max-width:${o.w||540}px">
+ <div class="gtab">κόραξ<b>♡</b>${esc(o.tab)}</div>
+ <div class="gimg"><img src="${o.img}" alt=""></div>${o.ms?`<img class="gstk" src="${o.ms}" alt="">`:''}
+ <div class="gdlg"><span class="who">${esc(o.who||'κόραξ')}</span><p>${o.line}</p><i class="nx">▼</i><span class="gd">${today().slice(5).replace('-','/')}</span></div>
+</figure>`;
+const folio=n=>'';
+const B=v=>`<b>${esc(v)}</b>`;
+
+/* ---------------- pages ---------------- */
+const SECTIONS=[
+ {id:'home',zh:'首页',L:homeL,R:homeR},
+ {id:'status',zh:'状态',L:statusL,R:statusR},
+ {id:'groups',zh:'群组',L:groupsL,R:groupsR},
+ {id:'tools',zh:'工具箱',L:toolsL,R:toolsR},
+ {id:'records',zh:'记录',L:recL,R:recR},
+];
+const pill=s=>{const m={confirmed:['完成',''],failed:['失败','f'],pending:['排队','q'],sending:['发送中','q'],unknown:['未知','f']}[s]||[s||'—','q'];return `<span class="pill ${m[1]}">${esc(m[0])}</span>`};
+
+function homeL(){
+ const o=D.ov||{},on=o.connection?.connection==='connected',c=o.counts||{};
+ const recent=(D.ta?.recent||[]).slice(0,4).map(t=>`<li><time>${hm(t.createdAt)}</time><div class="w"><b>${esc(KIND[t.kind]||t.kind)}</b><small>${esc(t.conversationType==='private'?'私聊':gname(t.targetId))}</small></div>${pill(t.status)}</li>`).join('')||'<li class="empty">还没有记录</li>';
+ const line=on?`已经连续醒着 ${B(upt(o.uptimeMs))}，今天在 ${B(c.groupsEnabled??'—')} 个群说了 ${B(fmt(c.botRepliesToday))} 句话。`:`连接暂时断开了……我在等它回来。上次醒着 ${B(upt(o.uptimeMs))}。`;
+ return `${tp('gi','left:50%;top:-8px;width:170px;height:26px;margin-left:-85px;transform:rotate(-2deg)')}
+ ${title('ANTEROS','今日手帐',2)}
+ ${gal({tab:'DIARY',img:'sc_home.webp',ms:'kWave.webp',line,r:-2})}
+ <div class="card cyc ${dz(.6)};margin-top:4px"><span class="ctab c">JUST NOW</span><h3 style="font-size:18px">刚刚<em>最近 4 条</em></h3><ul class="log">${recent}</ul></div>
+ ${stk('hWave.webp','left:22px;bottom:-12px;width:146px','hide-m',-3)}
+ ${stk('spkPink.webp','left:176px;bottom:70px;width:22px','hide-m',0)}
+ ${folio(1)}`;
+}
+function homeR(){
+ const o=D.ov||{},c=o.counts||{},cn=o.connection||{},on=cn.connection==='connected';
+ const st=o.stats||{};
+ const recent=(D.ta?.recent||[]).slice(0,4).map(t=>`<li><time>${hm(t.createdAt)}</time><div class="w"><b>${esc(KIND[t.kind]||t.kind)}</b><small>${esc(t.conversationType==='private'?'私聊':gname(t.targetId))}</small></div>${pill(t.status)}</li>`).join('')||'<li class="empty">还没有记录</li>';
+ return `${tp('st','right:40px;top:-6px;width:130px;height:24px;transform:rotate(4deg)')}
+ <div class="ttl ${dz(0)};margin-bottom:10px">${rn('TODAY',5)}${rn('今日记事',8,'zh')}</div>
+ <div class="bursts">${burst(fmt(c.messagesToday),'群消息','p',-6)}${burst(fmt(c.botRepliesToday),'回复','c',5)}${burst(fmt(c.topics),'话题','y',-3)}</div>
+ <div class="card ${dz(-.6)}"><span class="ctab p">CHECKLIST</span>
+  <h3>待办清单</h3>
+  ${chk(on,'QQ 在线',cn.selfId?'账号 '+esc(cn.selfId):'',on?'心跳 '+hm(cn.lastHeartbeatAt):'断开')}
+  ${chk(true,'模型在岗',esc(o.model?.active),null)}
+  ${chk((o.mcp?.connected||0)===(o.mcp?.total||0),'MCP 工具',`${o.mcp?.connected??0} / ${o.mcp?.total??0} 已连接`,null)}
+  ${chk(!(st.sentFailed||st.sentUnknown),'消息都送到了',`本次启动发出 ${fmt(st.sentConfirmed)} 条`,(st.sentFailed||st.sentUnknown)?`失败 ${st.sentFailed||0}`:'0 失败')}
+ </div>
+ <div class="two">
+  <div class="note ${dz(1.2)}">${tp('st')}<h3 style="font-size:18px">今天的我<small>memo</small></h3>
+   <div class="memo"><span class="dot ${on?'':'off'}"></span>${on?'在线，心跳正常。':'连接中断了，正在等它回来。'}</div>
+   <div class="memo" style="overflow-wrap:anywhere">模型 · ${esc(o.model?.active)}</div></div>
+  <div class="card lic toc ${dz(-.8)};padding:16px 16px 10px"><span class="ctab l">INDEX</span>
+   <h3 style="font-size:18px">目录</h3>
+   ${SECTIONS.slice(1).map((s,i)=>`<a data-go="${i+1}">${s.zh}<i></i><em>p.${P2(i*2+3)}</em></a>`).join('')}
+  </div>
+ </div>
+ 
+ ${folio(2)}`;
+}
+
+function statusL(){
+ const o=D.ov||{},cn=o.connection||{},st=o.stats||{},on=cn.connection==='connected',md=D.md||{};
+ const line=on?`醒着 ${B(upt(o.uptimeMs))} 了，最近心跳 ${B(hm(cn.lastHeartbeatAt))}，重连 ${B(cn.reconnectCount??0)} 次。`:`现在${B('离线')}，重连了 ${B(cn.reconnectCount??0)} 次，还在努力。`;
+ return `${title('STATUS','状态',4)}
+ ${gal({tab:'STATUS',img:'sc_status.webp',ms:'kCoffee.webp',line,r:1.5,w:450})}
+ <div class="card ${dz(-.5)}"><span class="ctab p">UPTIME</span>
+  <h3>醒着多久了<em><span class="dot ${on?'':'off'}"></span>${on?'在线':'离线'} · ${esc(upt(o.uptimeMs))}</em></h3>
+  <div class="pgrid">${R('QQ 号',cn.selfId)}${R('最近心跳',hm(cn.lastHeartbeatAt))}${R('重连次数',cn.reconnectCount??0)}${R('收到消息',fmt(st.receivedTotal))}
+  ${R('成功发出',fmt(st.sentConfirmed),'g')}${R('失败 / 未知',`${st.sentFailed??0} / ${st.sentUnknown??0}`,(st.sentFailed||st.sentUnknown)?'r':'')}${R('撤回',st.recalled??0)}${R('排队中',o.queue??0)}</div>
+  <div class="upd" style="margin-top:6px">收到 / 发出为本次启动以来</div>
+ </div>
+ <div class="note ${dz(-1.2)};max-width:400px">${tp('gi')}
+  <h3 style="font-size:18px">今天的模型<small>model</small></h3>
+  <div class="memo" style="font-size:17px;overflow-wrap:anywhere">${esc(md.active?.display||o.model?.active)}</div>
+  ${md.default?.model?`<div class="upd" style="margin-top:4px">默认 · ${esc(md.default.model)}</div>`:''}
+ </div>
+ ${stk('kCrow.webp','right:52px;bottom:44px;width:96px','hide-m',6)}
+ ${folio(3)}`;
+}
+function statusR(){
+ const h=D.sy?.host||{},p=D.sy?.process||{},o=D.ov||{};
+ const memp=h.memory?(1-h.memory.availableBytes/h.memory.totalBytes)*100:0,loadp=h.cpus?h.loadAvg[0]/h.cpus*100:0;
+ const svc=(D.sy?.services||o.services||[]).map(s=>chk(s.active==='active',esc(s.unit),s.restarts?`重启 ${s.restarts} 次`:'',s.active==='active'?(s.since?'since '+hm(s.since):'运行中'):esc(s.active))).join('');
+ return `${tp('st','left:120px;top:-6px;width:140px;height:24px;transform:rotate(-3deg)')}
+ <div class="card cyc ${dz(.6)};margin-top:18px"><span class="ctab c">HOST</span>
+  <h3>主机</h3>
+  ${gauge(`负载 · ${h.cpus||'—'} 核`,loadp,(h.loadAvg||[0])[0].toFixed(2))}
+  ${gauge('内存',memp,h.memory?`${GB(h.memory.totalBytes-h.memory.availableBytes)} / ${GB(h.memory.totalBytes)}`:'—','p')}
+  ${gauge('磁盘',h.disk?.usedPct||0,h.disk?`${h.disk.usedPct}%`:'—','c')}
+  <div class="pgrid">${R('机器开机',h.uptimeSec?dur(h.uptimeSec):'—')}${R('进程内存',p.rssBytes?MB(p.rssBytes):'—')}${R('数据库',p.dbBytes?MB(p.dbBytes):'—')}${R('Node',p.node)}</div>
+ </div>
+ <div class="card lic ${dz(-.5)}"><span class="ctab l">SERVICES</span><h3>服务<em>systemd</em></h3><div class="tight">${svc||'<div class="empty">—</div>'}</div></div>
+ <div class="note mshift ${dz(.8)};margin-right:120px">${tp('st')}<h3 style="font-size:18px">掉线小记<small>downtime</small><em>共 ${D.dt?.total??0} 次</em></h3><div class="pgrid">${(D.dt?.downtime||[]).slice(0,4).map(d=>R(hm(d.startedAt),d.durationSec!=null?d.durationSec+' 秒':'进行中','r')).join('')||'<div class="empty">没有掉线记录 ✦</div>'}</div></div>
+ ${stk('kAnnoy.webp','right:4px;bottom:30px;width:104px','hide-m',4)}
+ ${folio(4)}`;
+}
+
+function groupCard(g,i){
+ const hr=D.ac?.todayHourly?.[g.groupId]||Array(24).fill(0),mx=Math.max(1,...hr),nowH=new Date(Date.now()+8*3600e3).getUTCHours();
+ const bars=hr.map((v,k)=>`<i class="${k===nowH?'now':''}" style="height:${Math.max(3,v/mx*100)}%" title="${k}时 ${v}"></i>`).join('');
+ const top=(g.topSendersToday||[]).slice(0,5).map(u=>`<span>${esc(u.nickname)}<b>${u.messages}</b></span>`).join('')||'<span>今天还没人说话</span>';
+ return `<div class="card gcard ${['pkc','lic','cyc'][i%3]} ${dz([-1,1,-.6][i%3])}"><span class="ctab ${['p','l','c'][i%3]}">GROUP ${P2(i+1)}</span>
+  <div class="nm">${esc(g.name)}</div>
+  <div class="id">#${esc(g.groupId)} · ${g.memberCount??'—'} 人${g.mentionOnly?' · 只回 @':''}${g.enabled===false?' · 已停用':''}</div>
+  <div class="gnums"><div><b class="mono">${fmt(g.messagesToday)}</b>今日消息</div><div><b class="mono">${fmt(g.botRepliesToday)}</b>κόραξ 回复</div><div><b class="mono">${fmt(g.topics)}</b>话题</div></div>
+  <div class="bars">${bars}</div><div class="bx"><span>0 时</span><span>12 时</span><span>23 时</span></div>
+  <div class="chips">${top}</div>
+  ${g.lastMessageAt?`<div class="upd" style="margin-top:9px">最后一句 · ${esc(g.lastSenderName||'—')} ${hm(g.lastMessageAt)}</div>`:''}
+ </div>`;
+}
+const sortedGroups=()=>(D.gr?.groups||[]).slice().sort((a,b)=>(b.messagesToday||0)-(a.messagesToday||0));
+function groupsL(){
+ const gs=sortedGroups(),g0=gs[0];
+ const days=D.ac?.days||[];const mx=Math.max(1,...days.map(d=>d.totalBotSends||0));
+ const week=days.slice(-7).map(d=>`<div class="${d.date===today()?'today':''}"><b>${d.totalBotSends||0}</b><i style="height:${(d.totalBotSends||0)/mx*72}px"></i>${d.date.slice(5).replace('-','/')}</div>`).join('');
+ const line=g0?`今天最热闹的是「${B(g0.name)}」，${B(fmt(g0.messagesToday))} 条消息，我回了 ${B(fmt(g0.botRepliesToday))} 句。`:'还没有加入任何群。';
+ return `${title('GROUPS','群组',6)}
+ ${gal({tab:'GROUPS',img:'sc_groups.webp',ms:'kPeek.webp',line,r:-1.4,w:490})}
+ ${days.length?`<div class="note ${dz(.8)}">${tp('gi')}<h3 style="font-size:18px">这一周 κόραξ 说的话<small>7 days</small></h3><div class="week">${week}</div></div>`:''}
+ ${stk('kHugCrow.webp','right:64px;bottom:28px;width:112px','hide-m',-5)}${stk('heart.webp','right:170px;bottom:120px;width:30px','hide-m',10)}
+ ${folio(5)}`;
+}
+function groupsR(){
+ const gs=sortedGroups();
+ return `${tp('st','left:46%;top:-6px;width:130px;height:24px;transform:rotate(3deg)')}
+ <div style="height:14px"></div>
+ ${gs.map((g,i)=>groupCard(g,i)).join('')||'<div class="empty">还没有群</div>'}
+ ${D.gr?.retention?`<div class="upd">原始消息每天清理，只保留 ${D.gr.retention.rawRetentionDays??'—'} 天</div>`:''}
+ 
+ ${folio(6)}`;
+}
+
+function toolsL(){
+ const sv=(D.mc?.servers||[]).slice().sort((a,b)=>(b.connected-a.connected)||(b.tools-a.tools));
+ const tiles=sv.map(s=>`<div class="tile ${s.connected?'':'off'}"><div class="n">${esc(s.name)}</div><div class="i">${esc(s.connected?(s.serverInfo||s.transport||'已连接'):(s.error||'离线'))}</div><div class="c mono">${s.connected?s.tools:'离线'}</div></div>`).join('');
+ const total=sv.reduce((a,s)=>a+(s.connected?s.tools||0:0),0);
+ const line=`${B(`${D.mc?.connected??0} / ${D.mc?.total??0}`)} 个 MCP 已连接，手边一共有 ${B(fmt(total))} 件工具。`;
+ return `${title('TOOLBOX','工具箱',9)}
+ ${gal({tab:'TOOLS',img:'sc_tools.webp',ms:'kType.webp',line,r:1.2,w:480})}
+ <div class="card yec ${dz(-.4)}"><span class="ctab">MCP</span><h3>MCP 贴纸本<em>${sv.length} 个</em></h3>
+ <div class="tiles">${tiles||'<div class="empty">—</div>'}</div></div>
+ ${folio(7)}`;
+}
+function toolsR(){
+ const pr=(D.sc?.probes||[]).map(p=>chk(!!p.ok,esc(p.name),'',p.ok?p.latencyMs+' ms':esc(p.error||p.status))).join('');
+ const ct=(D.sc?.containers||[]).map(x=>chk(x.state==='running',esc(x.name.replace(/^qq-bot-/,'')),'',esc(String(x.status||'').replace(/^Up /,'').replace(/ \(healthy\)/,' · 健康').replace(/hours?/,'小时').replace(/days?/,'天').replace(/minutes?/,'分钟')))).join('');
+ const q=D.sc?.researchQuotaUsage?.periods||{},mk=Object.keys(q).filter(k=>k.startsWith('month:')).sort().pop();
+ const provs=(D.md?.providers||[]);
+ const prov=provs.map(p=>`<div class="row"><span>${p.active?'<span class="dot"></span>':''}${esc(p.name)}</span><b class="${p.active?'r':''}">${p.active?'在用 · ':''}${p.modelCount}</b></div>`).join('');
+ return `${tp('gi','left:110px;top:-8px;width:150px;height:26px;transform:rotate(-2deg)')}
+ <div class="card cyc ${dz(.5)};margin-top:18px"><span class="ctab c">SIDECARS</span><h3>旁路服务</h3><div class="tight">${pr||'<div class="empty">—</div>'}</div></div>
+ ${ct?`<div class="card lic ${dz(-.5)}"><span class="ctab l">DOCKER</span><h3>容器</h3><div class="tight">${ct}</div></div>`:''}
+ <div class="card pkc ${dz(.4)}"><span class="ctab p">PROVIDERS</span>
+  <h3>模型抽屉<em>${provs.length} 家</em></h3>
+  <div class="pgrid">${prov||'<div class="empty">—</div>'}</div>
+  ${mk?gauge('Tavily 本月搜索',(q[mk].tavily||0)/600*100,`${q[mk].tavily??0} / 600`,'p'):''}
+ </div>
+ ${stk('kThumb.webp','right:26px;top:22px;width:76px','hide-m',6)}
+ ${folio(8)}`;
+}
+
+function recL(){
+ const rows=(D.ta?.recent||[]).slice(0,12).map(t=>`<li><time>${hm(t.createdAt)}</time><div class="w"><b>${esc(KIND[t.kind]||t.kind)}</b><small>${esc(t.conversationType==='private'?'私聊':gname(t.targetId))}</small></div>${pill(t.status)}</li>`).join('')||'<li class="empty">还没有记录</li>';
+ const bs=D.ta?.byStatus||[];const ok=(bs.find(x=>x.status==='confirmed')||{}).n,fail=(bs.find(x=>x.status==='failed')||{}).n;
+ const last=(D.ta?.recent||[])[0];
+ const line=bs.length?`累计送达 ${B(fmt(ok))} 条，没送到 ${B(fmt(fail||0))} 条。${last?`最近一条是 ${B(hm(last.createdAt))} 的${esc(KIND[last.kind]||last.kind)}。`:''}`:(last?`最近一条是 ${B(hm(last.createdAt))} 的${esc(KIND[last.kind]||last.kind)}。`:'今天还没有发送记录。');
+ return `${title('RECORDS','记录',11)}
+ ${gal({tab:'RECORDS',img:'sc_records.webp',ms:'kCrow.webp',line,r:-1.2,w:420})}
+ <div class="card ${dz(.4)}"><span class="ctab p">SEND LOG</span><h3>发送日记</h3><ul class="log">${rows}</ul></div>
+ ${folio(9)}`;
+}
+function recR(){
+ const tpc=(D.tp?.topics||[]).slice(0,5).map(t=>`<div class="topic"><div class="h"><b>${esc(gname(t.groupId))}</b><span>${hm(t.startedAt)} – ${t.open||!t.endedAt?'进行中':hm(t.endedAt)} · ${t.messageCount} 条</span></div><p>${t.summary?esc(t.summary):'话题还在进行，总结稍后写好。'}</p></div>`).join('')||'<div class="empty">还没有话题</div>';
+ const p=D.pr?.proactive||{};
+ const mem=(D.me?.recent||[]).slice(0,2).map(m=>`<div class="memo" style="font-size:14.5px;margin-top:4px">· ${esc(m.statement)}</div>`).join('');
+ return `${tp('st','left:46%;top:-6px;width:130px;height:24px;transform:rotate(-3deg)')}
+ <div class="card lic ${dz(.5)};margin-top:18px"><span class="ctab l">TOPICS</span><h3>话题摘记</h3>${tpc}</div>
+ <div class="two">
+  <div class="note ${dz(-1.2)}">${tp('gi')}<h3 style="font-size:18px">主动消息<small>proactive</small></h3>
+   ${R('状态',p.paused?'已暂停':(p.enabled?'开启':'关闭'),p.paused?'r':'g')}${R('活跃时段',p.activeStart?`${p.activeStart} – ${p.activeEnd}`:'—')}${p.morningTime?R('早安',p.morningTime):''}
+  </div>
+  <div class="note ${dz(1.3)}">${tp('st')}<h3 style="font-size:18px">记住的事<small>memories</small><em>${D.ov?.counts?.memories??0}</em></h3>${mem||'<div class="empty">还没有</div>'}</div>
+ </div>
+ ${stk('kSleep.webp','right:6px;top:-12px;width:92px','hide-m',-4)}
+ ${folio(10)}`;
+}
+/* ---------------- book mechanics ---------------- */
+const spread=document.getElementById('spread'),tabs=document.getElementById('tabs');
+const PL=spread.querySelector('.page.L'),PR=spread.querySelector('.page.R');
+let cur=0,busy=false;
+const isPhone=()=>matchMedia('(max-width:820px)').matches;
+tabs.innerHTML=`<button class="tab cov" data-cover>封面</button>`+SECTIONS.map((s,i)=>`<button class="tab tc-${i}" data-tab="${i}"><span>${s.zh}</span></button>`).join('');
+const FOL=p=>{const i=Math.max(0,cur);return P2(i*2+(p===PL?1:2))};
+function paint(page,html,anim){page.className='page '+(page===PL?'L':'R')+(anim?(anim==='late'?' anim late':' anim'):'');const inn=page.querySelector('.inner');const st=inn.scrollTop;inn.innerHTML=html;inn.scrollTop=st;page.querySelector('.folio').textContent='— '+FOL(page)+' —'}
+function safe(f){DZ=0;try{return f()}catch(e){console.error(e);return '<div class="empty">数据还没到</div>'}}
+function fill(i,keepScroll,anim){const S=SECTIONS[i];paint(PL,safe(S.L),anim);paint(PR,safe(S.R),anim);
+ if(!keepScroll){PL.querySelector('.inner').scrollTop=0;PR.querySelector('.inner').scrollTop=0}
+ tabs.querySelectorAll('[data-tab]').forEach(t=>t.classList.toggle('on',+t.dataset.tab===i));}
+function faceFrom(page){const f=document.createElement('div');f.className=page.className.replace(' anim','')+' face';const inn=page.querySelector('.inner').cloneNode(true);f.appendChild(inn);f.appendChild(page.querySelector('.folio').cloneNode(true));return [f,page.querySelector('.inner').scrollTop]}
+function go(i,push=true){
+ if(i===cur||busy){return}
+ const prev=cur;cur=i;
+ if(push)history.replaceState(null,'','#'+SECTIONS[i].id);
+ const S=SECTIONS[i],fwd=i>prev,phone=isPhone();
+ if(matchMedia('(prefers-reduced-motion:reduce)').matches){fill(i);return}
+ busy=true;
+ const leaf=document.createElement('div');leaf.className='leaf';
+ const W=spread.clientWidth/2;
+ if(phone){
+  const old=spread.cloneNode(true);old.removeAttribute('id');old.style.cssText='position:absolute;left:0;right:0;top:'+spread.offsetTop+'px;transform-origin:left center;transition:transform .7s cubic-bezier(.5,.05,.3,1),opacity .7s;z-index:5;pointer-events:none';
+  old.querySelectorAll('.anim').forEach(e=>e.classList.remove('anim'));
+  document.getElementById('book').appendChild(old);
+  fill(i,false,true);window.scrollTo({top:0});
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{old.style.transform=`perspective(1600px) rotateY(${fwd?-75:75}deg)`;old.style.opacity='0'}));
+  setTimeout(()=>{old.remove();busy=false},720);return;
+ }
+ let front,back,fs,under;
+ if(fwd){
+  [front,fs]=faceFrom(PR);
+  leaf.style.cssText=`left:${W}px;width:${W}px;transform-origin:left center;animation:turnF .85s cubic-bezier(.45,.05,.35,1) forwards`;
+  paint(PR,safe(S.R),'late');PR.querySelector('.inner').scrollTop=0;under=PR;
+  back=document.createElement('div');back.className='page L face back';back.innerHTML='<div class="inner">'+safe(S.L)+'</div><div class="folio">— '+P2(i*2+1)+' —</div>';
+ }else{
+  [front,fs]=faceFrom(PL);
+  leaf.style.cssText=`left:0;width:${W}px;transform-origin:right center;animation:turnB .85s cubic-bezier(.45,.05,.35,1) forwards`;
+  paint(PL,safe(S.L),'late');PL.querySelector('.inner').scrollTop=0;under=PL;
+  back=document.createElement('div');back.className='page R face back';back.innerHTML='<div class="inner">'+safe(S.R)+'</div><div class="folio">— '+P2(i*2+2)+' —</div>';
+ }
+ const sh=document.createElement('div');sh.className='shade';sh.style.background=`linear-gradient(${fwd?90:270}deg,rgba(200,110,150,0),rgba(200,110,150,.25))`;sh.style.animation='shadeIn .85s forwards';
+ front.appendChild(sh);leaf.append(front,back);spread.appendChild(leaf);
+ front.querySelector('.inner').scrollTop=fs;
+ tabs.querySelectorAll('[data-tab]').forEach(t=>t.classList.toggle('on',+t.dataset.tab===i));
+ setTimeout(()=>{const other=under===PR?PL:PR;paint(other,safe(under===PR?S.L:S.R),false);other.querySelector('.inner').scrollTop=0;leaf.remove();busy=false},860);
+ setTimeout(()=>{if(cur===i&&!busy)under.classList.remove('anim','late')},1500);
+}
+function openBook(i){
+ document.body.classList.add('opened');cur=i;fill(i,false,true);history.replaceState(null,'','#'+SECTIONS[i].id);
+ setTimeout(()=>{if(cur===i){PL.classList.remove('anim');PR.classList.remove('anim')}},2200);
+}
+function toCover(){document.body.classList.remove('opened');history.replaceState(null,'',location.pathname+location.search);window.scrollTo({top:0})}
+document.getElementById('cover').onclick=()=>openBook(0);
+tabs.addEventListener('click',e=>{const t=e.target.closest('button');if(!t)return;if(t.dataset.cover!==undefined)return toCover();go(+t.dataset.tab)});
+spread.addEventListener('click',e=>{const a=e.target.closest('[data-go]');if(a)go(+a.dataset.go)});
+addEventListener('keydown',e=>{if(!document.body.classList.contains('opened')){if(e.key==='Enter'||e.key===' ')openBook(0);return}
+ if(e.key==='ArrowRight'&&cur<SECTIONS.length-1)go(cur+1);if(e.key==='ArrowLeft'&&cur>0)go(cur-1);if(e.key==='Escape')toCover()});
+let sx=null,sy=null;spread.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
+spread.addEventListener('touchend',e=>{if(sx==null)return;const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;sx=null;
+ if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.6){if(dx<0&&cur<SECTIONS.length-1)go(cur+1);else if(dx>0&&cur>0)go(cur-1)}},{passive:true});
+
+function coverState(){const o=D.ov||{},on=o.connection?.connection==='connected';
+ document.getElementById('covDot').className=on?'':'off';
+ document.getElementById('covState').textContent=(on?'在线 · 醒着 '+upt(o.uptimeMs):'暂时离线')+' · 点开翻阅';
+ document.querySelectorAll('[data-k="year"]').forEach(e=>e.textContent=today().slice(0,4));}
+async function refresh(full){
+ await (full?Promise.all([loadCore(),loadMore()]):loadCore());
+ coverState();
+ if(document.body.classList.contains('opened')&&!busy&&cur>=0)fill(cur,true,false);
+}
+(async()=>{
+ const h=location.hash.slice(1),idx=SECTIONS.findIndex(s=>s.id===h);
+ await refresh(true);
+ if(idx>=0){document.body.classList.add('opened','instant');openBook(idx)}
+ setInterval(()=>refresh(false),30000);setInterval(()=>refresh(true),120000);
+})();
+</script>
+</body></html>

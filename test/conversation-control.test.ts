@@ -8,7 +8,7 @@ import type { MessageRecord, MessageSegment } from "../src/types.js";
 const OWNER = "10001";
 const message = (text: string, overrides: Partial<MessageRecord> = {}): MessageRecord => ({
   eventKey: "acct:group_100:1", accountId: "acct", providerId: "onebot", conversationId: "group_100",
-  groupId: "100", messageId: "1", senderId: "12345678", displayNameAtTime: "朔朔",
+  groupId: "100", messageId: "1", senderId: "12345678", displayNameAtTime: "阿盏",
   sentAt: new Date().toISOString(), receivedAt: new Date().toISOString(),
   segments: [{ type: "text", data: { text } }], textContent: text, status: "active", origin: "live", ...overrides,
 });
@@ -61,11 +61,11 @@ test("主人提及使用真实 at 或完整别名，单字、相似英语名字�
   assert.equal(mentionsOwner([{ type: "at", data: { qq: OWNER } }], "", [OWNER]), true);
   assert.equal(mentionsOwner([{ type: "at", data: { qq: "all" } }], "", [OWNER]), false);
   assert.equal(mentionsOwner([{ type: "at", data: { qq: "12345678" } }], "", [OWNER]), false);
-  for (const text of ["朔朔你在吗", "找小月亮问件事", "@LITTLE MOON？", "Moon 说什么了？", "Moon刚才说什么？", "朔朔（有空吗）"]) {
-    assert.equal(mentionsOwner([], text, [OWNER], ["朔朔", "小月亮", "Little Moon", "Moon"]), true, text);
+  for (const text of ["阿盏你在吗", "找小月亮问件事", "@LITTLE MOON？", "Moon 说什么了？", "Moon刚才说什么？", "阿盏（有空吗）"]) {
+    assert.equal(mentionsOwner([], text, [OWNER], ["阿盏", "小月亮", "Little Moon", "Moon"]), true, text);
   }
   for (const text of ["明天会有月亮", "Moonlight 很好听", "SuperMoon 是啥", "moon_abc", "mymoon", "123Moon45", "一个朔字"]) {
-    assert.equal(mentionsOwner([], text, [OWNER], ["朔朔", "小月亮", "Moon", "朔", "月", "???"]), false, text);
+    assert.equal(mentionsOwner([], text, [OWNER], ["阿盏", "小月亮", "Moon", "朔", "月", "???"]), false, text);
   }
   assert.equal(mentionsOwner([], "找 A.B 問件事", [OWNER], ["A.B"]), true);
   assert.equal(mentionsOwner([], "找 AxB 問件事", [OWNER], ["A.B"]), false);
@@ -83,7 +83,7 @@ test("控制动作仅允许静默或拉黑，不向调用方传递任何指定�
 });
 
 test("主模型提示包含沉默、真实身份与资料归属，主人名字提及触发询问意图", () => {
-  const prompt = conversationControlInstruction(message("朔朔在吗"), { ownerIds: [OWNER], ownerAliases: ["朔朔"] });
+  const prompt = conversationControlInstruction(message("阿盏在吗"), { ownerIds: [OWNER], ownerAliases: ["阿盏"] });
   assert.match(prompt, /在本次回复中自己决定/);
   assert.match(prompt, /conversation_action\(action="silent"\)/);
   assert.match(prompt, /conversation_action\(action="blacklist"/);
@@ -95,14 +95,14 @@ test("主模型提示包含沉默、真实身份与资料归属，主人名字�
 });
 
 test("冒用主人昵称不成为主人，主人本人不会因提及自己触发插话，也禁止自动拉黑", () => {
-  const ownerPrompt = conversationControlInstruction(message("朔朔在吗", { senderId: OWNER }), { ownerIds: [OWNER], ownerAliases: ["朔朔"] });
+  const ownerPrompt = conversationControlInstruction(message("阿盏在吗", { senderId: OWNER }), { ownerIds: [OWNER], ownerAliases: ["阿盏"] });
   assert.match(ownerPrompt, /发送者属于已配置的主人，不得自动拉黑/);
   assert.doesNotMatch(ownerPrompt, /简短问他找主人有什么事/);
-  const privatePrompt = conversationControlInstruction(message("朔朔在吗", { groupId: undefined, conversationId: "private_12345678" }), { ownerIds: [OWNER], ownerAliases: ["朔朔"] });
+  const privatePrompt = conversationControlInstruction(message("阿盏在吗", { groupId: undefined, conversationId: "private_12345678" }), { ownerIds: [OWNER], ownerAliases: ["阿盏"] });
   assert.doesNotMatch(privatePrompt, /简短问他找主人有什么事/);
 });
 
 test("外部分享卡片提及主人不触发当前发送者找主人提示", () => {
-  const m = message("朔朔在吗", { segments: [{ type: "share", data: { title: "朔朔在吗", url: "https://example.com" } }] });
-  assert.doesNotMatch(conversationControlInstruction(m, { ownerIds: [OWNER], ownerAliases: ["朔朔"] }), /简短问他找主人有什么事/);
+  const m = message("阿盏在吗", { segments: [{ type: "share", data: { title: "阿盏在吗", url: "https://example.com" } }] });
+  assert.doesNotMatch(conversationControlInstruction(m, { ownerIds: [OWNER], ownerAliases: ["阿盏"] }), /简短问他找主人有什么事/);
 });

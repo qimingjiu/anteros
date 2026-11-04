@@ -119,6 +119,9 @@ function seg(type: string, data: Record<string, unknown>): MessageSegment {
           content: data.content as string | undefined,
         },
       };
+    case "location":
+      return { type: "json", data: { data: JSON.stringify({ meta: { "Location.Search": {
+        lat: data.lat, lng: data.lon ?? data.lng, name: data.title ?? data.name ?? "", address: data.content ?? data.address ?? "" } } }) } };
     default:
       return { type: "unknown", data };
   }
@@ -133,6 +136,12 @@ export function segmentsText(segments: MessageSegment[]): string {
       try {
         const j = JSON.parse(raw) as Record<string, unknown>;
         const meta = (j.meta as Record<string, Record<string, { url?: string; title?: string; desc?: string }>> | undefined) ?? {};
+        const loc = (meta["Location.Search"] ?? (meta as Record<string, unknown>).location) as Record<string, unknown> | undefined;
+        if (loc && (loc.lat ?? loc.latitude) !== undefined && (loc.lng ?? loc.lon ?? loc.longitude) !== undefined) {
+          const lat = String(loc.lat ?? loc.latitude), lng = String(loc.lng ?? loc.lon ?? loc.longitude);
+          parts.push(`[位置分享] ${String(loc.name ?? "")} ${String(loc.address ?? "")} 坐标(经度,纬度,GCJ-02)=${lng},${lat}`.trim());
+          continue;
+        }
         const news = meta.news ?? meta.detail_1 ?? {};
         if (news.url) parts.push(String(news.url));
         if (news.title) parts.push(String(news.title));
@@ -509,6 +518,27 @@ export class OneBotProvider implements Provider {
 
   private eventKey(groupId: string | undefined, messageId: string): string {
     return `${this.opts.accountId}:${groupId ? `group_${groupId}` : "private"}:message:${messageId}`;
+  }
+
+  /** 人格切换时改 QQ 昵称和各群名片；失败不影响切换。 */
+  async renameSelf(nickname: string, groupIds: string[]): Promise<void> {
+    const r: any = await this.call("set_qq_profile", { nickname });
+    if (r?.retcode !== 0) log.warn("改昵称失败", { nickname, wording: r?.wording });
+    const selfId = this.health().selfId;
+    if (!selfId) return;
+    for (const g of groupIds) {
+      try { await this.call("set_group_card", { group_id: Number(g), user_id: Number(selfId), card: nickname }); }
+      catch (e) { log.warn("改群名片失败", { group: g, error: (e as Error).message }); }
+      await new Promise(res => setTimeout(res, 800));
+    }
+  }
+
+  async deleteMessage(t: { messageId: string }): Promise<{ ok: true } | { ok: false; error: string }> {
+    const id = /^-?\d+$/.test(t.messageId) ? Number(t.messageId) : t.messageId;
+    try {
+      const r: any = await this.call("delete_msg", { message_id: id });
+      return r?.status === "ok" || r?.retcode === 0 ? { ok: true } : { ok: false, error: String(r?.wording ?? r?.message ?? `retcode ${r?.retcode}`) };
+    } catch (e) { return { ok: false, error: (e as Error).message }; }
   }
 
   // ---------- 动作调用 ----------

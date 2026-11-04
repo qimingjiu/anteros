@@ -97,6 +97,14 @@ export interface PublicResponse {
   headers: Headers;
   truncated: boolean;
 }
+export interface PublicBytesResponse {
+  bytes: Uint8Array;
+  finalUrl: string;
+  contentType: string;
+  status: number;
+  headers: Headers;
+  truncated: boolean;
+}
 
 export async function readBounded(response: Response, maxBytes: number): Promise<{ bytes: Uint8Array; truncated: boolean }> {
   if (!response.body) return { bytes: new Uint8Array(), truncated: false };
@@ -135,7 +143,7 @@ async function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T
 }
 
 /** Validates every redirect and pins the actual connection to the validated DNS records. */
-export async function fetchPublic(value: string, options: PublicFetchOptions): Promise<PublicResponse> {
+export async function fetchPublicBytes(value: string, options: PublicFetchOptions): Promise<PublicBytesResponse> {
   const signal = AbortSignal.any([AbortSignal.timeout(Math.max(1, Math.floor(options.timeoutMs))), ...(options.signal ? [options.signal] : [])]);
   let current = publicUrlSyntax(value);
   try {
@@ -171,10 +179,7 @@ export async function fetchPublic(value: string, options: PublicFetchOptions): P
         }
         const { bytes, truncated } = await readBounded(response, options.maxBytes);
         const contentType = response.headers.get("content-type") ?? "";
-        const charset = /charset=["']?([\w-]+)/i.exec(contentType)?.[1] ?? "utf-8";
-        let body: string;
-        try { body = new TextDecoder(charset).decode(bytes); } catch { body = new TextDecoder().decode(bytes); }
-        return { body, finalUrl: current.toString(), contentType, status: response.status, headers: response.headers, truncated };
+        return { bytes, finalUrl: current.toString(), contentType, status: response.status, headers: response.headers, truncated };
       } finally { release?.(); await dispatcher.close(); }
     }
     throw new WebAccessError("http_error");
@@ -183,6 +188,15 @@ export async function fetchPublic(value: string, options: PublicFetchOptions): P
     if (signal.aborted) throw new WebAccessError("timeout");
     throw new WebAccessError("network");
   }
+}
+
+/** Text compatibility wrapper; binary callers retain the original response bytes. */
+export async function fetchPublic(value: string, options: PublicFetchOptions): Promise<PublicResponse> {
+  const { bytes, ...response } = await fetchPublicBytes(value, options);
+  const charset = /charset=["']?([\w-]+)/i.exec(response.contentType)?.[1] ?? "utf-8";
+  let body: string;
+  try { body = new TextDecoder(charset).decode(bytes); } catch { body = new TextDecoder().decode(bytes); }
+  return { ...response, body };
 }
 
 /** Latest finite timestamp supported by JavaScript Date, used to fail closed on absurd retry values. */

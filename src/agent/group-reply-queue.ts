@@ -43,6 +43,17 @@ export class GroupReplyQueue {
 
   draining(groupId: string): Promise<void> | undefined { return this.groups.get(groupId)?.drained; }
 
+  /** 闭嘴/叫停：中断该群进行中和排队中的全部回复，不论优先级与是否可打断。 */
+  abortAll(groupId: string): number {
+    const queue = this.groups.get(groupId);
+    if (!queue) return 0;
+    let count = 0;
+    if (queue.active && !queue.active.controller.signal.aborted) { queue.active.controller.abort(); count++; }
+    for (const job of queue.jobs) { job.controller.abort(); job.complete(); count++; }
+    queue.jobs = [];
+    return count;
+  }
+
   private async drain(groupId: string, queue: GroupQueue): Promise<void> {
     // 同一事件循环内到达的召唤先于环境快照开始。
     await Promise.resolve();

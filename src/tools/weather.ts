@@ -200,6 +200,26 @@ export class OpenMeteoWeather {
     finally { clearTimeout(timer); }
   }
 
+  /** Chinese place names (districts, "省+市") resolved via AMap REST geocoding when an AMap key is available. */
+  private async amapResolve(query: string): Promise<WeatherLocation | "ambiguous" | null> {
+    if (!/\p{Script=Han}/u.test(query)) return null;
+    let key = process.env.AMAP_KEY?.trim() ?? "";
+    if (!key && process.env.AMAP_MCP_URL) { try { key = new URL(process.env.AMAP_MCP_URL).searchParams.get("key") ?? ""; } catch { key = ""; } }
+    if (!key) return null;
+    const [place, qualifier] = query.split(",").map(part => part.trim());
+    const url = new URL("https://restapi.amap.com/v3/geocode/geo");
+    url.search = new URLSearchParams({ key, address: `${qualifier ?? ""}${place}`, output: "JSON" }).toString();
+    const raw = await this.json(url) as Record<string, unknown>;
+    if (raw.status !== "1" || !Array.isArray(raw.geocodes) || !raw.geocodes.length) return null;
+    if (raw.geocodes.length > 1) return "ambiguous";
+    const g = raw.geocodes[0] as Record<string, unknown>;
+    const [lng, lat] = String(g.location ?? "").split(",").map(Number);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const pick = (v: unknown) => typeof v === "string" && v ? v : undefined;
+    return { name: pick(g.formatted_address) ?? place!, latitude: number(lat, "地点纬度", -90, 90), longitude: number(lng, "地点经度", -180, 180),
+      timezone: this.cfg.timezone && this.cfg.timezone !== "auto" ? this.cfg.timezone : "Asia/Shanghai", countryCode: "CN", admin1: pick(g.province) };
+  }
+
   private async resolve(location?: string): Promise<WeatherLocation> {
     const query = (location?.trim() || this.cfg.defaultLocation?.trim() || "").replace(/，/g, ",");
     if (query.length > 100 || /[\r\n]/.test(query)) throw new WeatherError("请提供简短的城市名称");
@@ -216,6 +236,9 @@ export class OpenMeteoWeather {
     if (/^[\p{Script=Han}]{2,4}$/u.test(city!) && !city!.endsWith("市")) variants.push(`${city}市${qualifier ? `,${qualifier}` : ""}`);
     if (normalizePlace(city!) === "长沙") variants.push(`Changsha${qualifier ? `,${qualifier}` : ""}`);
     let ambiguous = false;
+    const amap = await this.amapResolve(query).catch(() => null);
+    if (amap === "ambiguous") ambiguous = true;
+    else if (amap) { this.locations.set(key, { value: amap, expires: this.now() + this.ttl }); return { ...amap }; }
     for (const variant of [...new Set(variants)]) {
       for (const language of ["zh", "en"]) {
         const url = new URL(GEOCODING);

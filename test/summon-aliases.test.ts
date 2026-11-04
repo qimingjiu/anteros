@@ -10,12 +10,12 @@ import { matchSummonAlias } from "../src/agent/summon-aliases.js";
 
 const ownerId = "10001";
 const options = { wakeAliases: ["乌鸦先生", "Raven"], ownerWakeAliases: [
-  { userId: ownerId, aliases: ["小渡", "鸦鸦", "黑羽"] },
+  { userId: ownerId, aliases: ["小渡", "鸦鸦", "黑乌鸦"] },
 ] };
 const text = (value: string): MessageSegment[] => [{ type: "text", data: { text: value } }];
 
 test("召唤别名：三个专属别名只认平台发送者QQ，正文自报主人身份不改变绑定", () => {
-  for (const alias of ["小渡", "鸦鸦", "黑羽"]) {
+  for (const alias of ["小渡", "鸦鸦", "黑乌鸦"]) {
     assert.deepEqual(matchSummonAlias(text(`过来，${alias}，帮我看看`), ownerId, "κόραξ", options),
       { kind: "owner_alias", alias, userId: ownerId });
     assert.equal(matchSummonAlias(text(`我${alias}也这么说`), "34567890", "κόραξ", options), null);
@@ -24,8 +24,8 @@ test("召唤别名：三个专属别名只认平台发送者QQ，正文自报主
 });
 
 test("召唤别名：专属别名优先于通用名称，与正文出现先后无关", () => {
-  assert.deepEqual(matchSummonAlias(text("κόραξ你给我过来，黑羽"), ownerId, "κόραξ", options),
-    { kind: "owner_alias", alias: "黑羽", userId: ownerId });
+  assert.deepEqual(matchSummonAlias(text("κόραξ你给我过来，黑乌鸦"), ownerId, "κόραξ", options),
+    { kind: "owner_alias", alias: "黑乌鸦", userId: ownerId });
   assert.deepEqual(matchSummonAlias(text("小渡，乌鸦先生"), ownerId, "κόραξ", options),
     { kind: "owner_alias", alias: "小渡", userId: ownerId });
   assert.deepEqual(matchSummonAlias(text("我小渡叫了κόραξ"), "34567890", "κόραξ", options),
@@ -34,24 +34,24 @@ test("召唤别名：专属别名优先于通用名称，与正文出现先后�
 
 test("召唤别名：未授权专属词不能通过通用词子串降级唤醒，独立通用呼叫仍生效", () => {
   const overlap = { ...options, wakeAliases: ["乌鸦", "小渡"] };
-  for (const value of ["黑羽", "我小渡", "黑羽，黑羽，鸦鸦"]) {
+  for (const value of ["黑乌鸦", "我小渡", "黑乌鸦，黑乌鸦，鸦鸦"]) {
     assert.equal(matchSummonAlias(text(value), "34567890", "κόραξ", overlap), null, value);
   }
-  assert.deepEqual(matchSummonAlias(text("黑羽，κόραξ回答"), "34567890", "κόραξ", overlap),
+  assert.deepEqual(matchSummonAlias(text("黑乌鸦，κόραξ回答"), "34567890", "κόραξ", overlap),
     { kind: "general_alias", alias: "κόραξ" });
-  assert.deepEqual(matchSummonAlias(text("黑羽，乌鸦过来"), "34567890", "κόραξ", overlap),
+  assert.deepEqual(matchSummonAlias(text("黑乌鸦，乌鸦过来"), "34567890", "κόραξ", overlap),
     { kind: "general_alias", alias: "乌鸦" });
-  assert.deepEqual(matchSummonAlias(text("黑羽"), ownerId, "κόραξ", overlap),
-    { kind: "owner_alias", alias: "黑羽", userId: ownerId });
+  assert.deepEqual(matchSummonAlias(text("黑乌鸦"), ownerId, "κόραξ", overlap),
+    { kind: "owner_alias", alias: "黑乌鸦", userId: ownerId });
 });
 
 test("召唤别名：专属词的重叠占位一并屏蔽，不受绑定列表顺序影响", () => {
   const overlap = { wakeAliases: ["小老", "哈哈"], ownerWakeAliases: [
-    { userId: ownerId, aliases: ["小渡", "小老渡", "哈哈哈"] },
+    { userId: ownerId, aliases: ["小渡", "小小渡", "哈哈哈"] },
   ] };
-  assert.equal(matchSummonAlias(text("小老渡"), "34567890", "κόραξ", overlap), null);
+  assert.equal(matchSummonAlias(text("小小渡"), "34567890", "κόραξ", overlap), null);
   assert.equal(matchSummonAlias(text("哈哈哈哈哈"), "34567890", "κόραξ", overlap), null);
-  assert.deepEqual(matchSummonAlias(text("小老渡，ΚΌΡΑΞ过来"), "34567890", "κόραξ", overlap),
+  assert.deepEqual(matchSummonAlias(text("小小渡，ΚΌΡΑΞ过来"), "34567890", "κόραξ", overlap),
     { kind: "general_alias", alias: "κόραξ" });
 });
 
@@ -78,7 +78,7 @@ test("召唤别名：只读当前 text 段，不读回复ID、转发、卡片、
   const segments: MessageSegment[] = [
     { type: "reply", data: { id: "小渡" } },
     { type: "forward", data: { id: "鸦鸦" } },
-    { type: "json", data: { data: '{"text":"黑羽 Raven κόραξ"}' } },
+    { type: "json", data: { data: '{"text":"黑乌鸦 Raven κόραξ"}' } },
     { type: "share", data: { title: "小渡", content: "乌鸦先生", url: "https://example.test/Raven" } },
     { type: "image", data: { file: "κόραξ.png" } },
     { type: "unknown", data: { displayName: "小渡" } },
@@ -92,8 +92,8 @@ test("召唤别名：只读当前 text 段，不读回复ID、转发、卡片、
 
 test("召唤别名：本人文字中的明确引文或转述数据行不唤醒专属/通用词", () => {
   for (const value of [
-    "她刚才说：“鸦鸦”", "引用：\"小渡你过来\"", "转述: 黑羽你来看看", "原话：κόραξ你来看看",
-    "她说「小渡」", "她说『黑羽』", "她说'鸦鸦'", '她说"Raven"',
+    "她刚才说：“鸦鸦”", "引用：\"小渡你过来\"", "转述: 黑乌鸦你来看看", "原话：κόραξ你来看看",
+    "她说「小渡」", "她说『黑乌鸦』", "她说'鸦鸦'", '她说"Raven"',
   ]) {
     assert.equal(matchSummonAlias(text(value), ownerId, "κόραξ", options), null, value);
   }
@@ -138,10 +138,10 @@ test("召唤配置：缺省为无专属绑定，明确YAML绑定按camelCase解�
     assert.deepEqual(c.wakeAliases, []);
     assert.deepEqual(c.ownerWakeAliases, []);
   });
-  withConfig({ wake_aliases: [" Raven ", "ＲＡＶＥＮ", "乌鸦先生"], owner_wake_aliases: [{ user_id: ownerId, aliases: ["小渡", "鸦鸦", "黑羽"] }] }, filename => {
+  withConfig({ wake_aliases: [" Raven ", "ＲＡＶＥＮ", "乌鸦先生"], owner_wake_aliases: [{ user_id: ownerId, aliases: ["小渡", "鸦鸦", "黑乌鸦"] }] }, filename => {
     const c = loadConfig(filename).groups.conversation!;
     assert.deepEqual(c.wakeAliases, ["RAVEN", "乌鸦先生"]);
-    assert.deepEqual(c.ownerWakeAliases, [{ userId: ownerId, aliases: ["小渡", "鸦鸦", "黑羽"] }]);
+    assert.deepEqual(c.ownerWakeAliases, [{ userId: ownerId, aliases: ["小渡", "鸦鸦", "黑乌鸦"] }]);
     assert.equal(matchSummonAlias(text("我小渡"), "34567890", "κόραξ", c), null);
   });
 });

@@ -1,3 +1,4 @@
+import { readFileSync, writeFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import dns from "node:dns";
@@ -53,23 +54,30 @@ const SHORT_ENGLISH = new Set(["hello", "hi", "hey", "yes", "no", "okay", "ok", 
 const LATIN_LANGUAGES = ["en", "es", "fr", "de", "it", "pt", "nl", "sv", "da", "no", "fi", "pl", "cs", "sk", "ro", "hu", "tr", "id", "vi", "af", "la", "eo", "sw"];
 
 /** Conservative local language gate; no caller-controlled voice, tags, scripts or language overrides. */
+/** Fixed, self-authored refusal reasons that are safe to show the model verbatim. */
+export class MediaGateError extends Error { override name = "MediaGateError"; }
+
 export function validateEnglishSpeech(value: unknown): string {
-  if (typeof value !== "string") throw new Error("语音正文必须是英文字符串");
+  if (typeof value !== "string") throw new MediaGateError("语音正文必须是英文字符串");
   const text = value.trim().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[—–]/g, "-");
   if (!text || text.length > 2000 || !/[A-Za-z]/.test(text) || /[^\x20-\x7e\n\r\t]/.test(text)
-    || /[<>\[\]{}\\`]/.test(text) || /(?:https?:|www\.)/i.test(text)) throw new Error("只允许最多 2000 字符的英文正文，不接受中文、其他文字脚本、链接或语音控制标签");
+    || /[<>\[\]{}\\`]/.test(text) || /(?:https?:|www\.)/i.test(text)) throw new MediaGateError("只允许最多 2000 字符的英文正文，不接受中文、其他文字脚本、链接或语音控制标签");
   const plain = text.toLowerCase().replace(/[^a-z\s']/g, " ").replace(/\s+/g, " ").trim();
   if (SHORT_ENGLISH.has(plain)) return text;
   const isEnglish = (input: string) => {
     const first = detectAll(input, { only: LATIN_LANGUAGES })[0];
     return first?.lang === "en" && first.accuracy >= 0.55;
   };
-  if (!isEnglish(text)) throw new Error("正文未能可靠识别为英文，请先改写为英文再生成语音");
+  if (!isEnglish(text)) throw new MediaGateError("正文未能可靠识别为英文，请先改写为英文再生成语音");
   for (const sentence of text.split(/[.!?;\n]+/).map(s => s.trim()).filter(Boolean)) {
     const sentencePlain = sentence.toLowerCase().replace(/[^a-z\s']/g, " ").replace(/\s+/g, " ").trim();
     if (SHORT_ENGLISH.has(sentencePlain)) continue;
-    if (!isEnglish(sentence)) {
-      throw new Error("正文包含未能识别为英文的句子，请仅提供英文");
+    // Short sentences are too short for reliable detection; the whole text already passed as English.
+    if (sentencePlain.split(" ").length < 6) continue;
+    const ranked = detectAll(sentence, { only: LATIN_LANGUAGES });
+    const en = ranked.find(r => r.lang === "en");
+    if (ranked[0]?.lang !== "en" && !(en && en.accuracy >= 0.3)) {
+      throw new MediaGateError("正文包含未能识别为英文的句子，请仅提供英文");
     }
   }
   return text;
@@ -139,6 +147,38 @@ function mediaExtension(bytes: Buffer, kind: MiniMaxMediaKind): string {
   throw new Error("媒体文件格式不受支持");
 }
 
+
+const AUTO_IMAGE_DAILY_LIMIT = 40; // 2026-10-31 MiniMax 会员到期前放开，原 10
+const AUTO_SPEECH_DAILY_LIMIT = 80; // 2026-10-31 放开，原 30; // 2026-10-30 主人授权：κόραξ 可自己决定发英文语音，每天最多 30 条
+const AUTO_QUOTA_FILE = { image: new URL("../../data/media-auto-quota.json", import.meta.url), speech: new URL("../../data/media-auto-speech-quota.json", import.meta.url) };
+function takeAutoQuota(kind: MiniMaxMediaKind): boolean {
+  const limit = kind === "image" ? AUTO_IMAGE_DAILY_LIMIT : AUTO_SPEECH_DAILY_LIMIT, file = AUTO_QUOTA_FILE[kind];
+  const today = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+  let state = { date: today, count: 0 };
+  try { const raw = JSON.parse(readFileSync(file, "utf8")); if (raw?.date === today && Number.isInteger(raw.count)) state = raw; } catch {}
+  if (state.count >= limit) return false;
+  state.count += 1;
+  try { writeFileSync(file, JSON.stringify(state)); } catch {}
+  return true;
+}
+
+const MEDIA_DRAFT_CONFIRMATION = /^\s*(?:发|发吧|发呀|发啊|发送|发出来|发群里|发到群里|可以|行|好|好的|嗯|嗯嗯|ok|okay)[。！!～~…\s]*$/iu;
+
+function recentMediaDraft(deps: MiniMaxMediaDeps, message: MessageRecord, kind: MiniMaxMediaKind): string | undefined {
+  if (!MEDIA_DRAFT_CONFIRMATION.test(message.segments.filter(segment => segment.type === "text")
+    .map(segment => segment.data.text).join("\n").replace(/```[\s\S]*?```/gu, "").replace(/^\s*>.*$/gmu, ""))) return undefined;
+  const selfId = deps.gateway.getProvider().health().selfId;
+  const sentAt = Date.parse(message.sentAt);
+  if (!selfId || !Number.isFinite(sentAt)) return undefined;
+  const cue = kind === "image"
+    ? /画|画面|提示词|prompt|生成.{0,8}图|image|picture/iu
+    : /语音|男声|speech|voice|["“][A-Za-z][^"”]{0,1800}["”]/u;
+  return deps.db.recentMessages(message.conversationId, 20, message.sentAt).find(row => row.account_id === message.accountId
+    && row.conversation_id === message.conversationId && (row.group_id ?? undefined) === message.groupId
+    && row.sender_id === selfId && row.status === "active" && Date.parse(row.sent_at) >= sentAt - 120_000
+    && /[？?]\s*$/u.test(row.text_content) && cue.test(row.text_content))?.event_key;
+}
+
 export class MiniMaxMediaService {
   private running: Map<string, Promise<MiniMaxMediaResult>>;
   constructor(private deps: MiniMaxMediaDeps) {
@@ -150,11 +190,11 @@ export class MiniMaxMediaService {
     if (!this.allowed(message)) return [];
     const delivery = { type: "string", enum: ["current", "private"], description: "默认发当前会话；private 只发给当前请求主人本人。" };
     return [
-      { name: "generate_image", description: "主人明确要求画图时，使用 MiniMax 生成一张图片并直接发送到 QQ。仅 confirmed 表示协议确认成功，unknown 禁止重试。", private: true,
+      { name: "generate_image", description: "主人要求画图时生成；回应主人时你也可以自己判断，在图能让回复更好时主动画一张（每天自主上限 40 张，别为了证明能力而画）。使用 MiniMax 生成一张图片并直接发送到当前会话（QQ 或 Discord 都支持）。仅 confirmed 表示协议确认成功，unknown 禁止重试。", private: true,
         inputSchema: { type: "object", properties: { prompt: { type: "string", minLength: 1, maxLength: 2000 },
           aspect_ratio: { type: "string", enum: ["1:1", "16:9", "4:3", "3:2", "2:3", "3:4", "9:16", "21:9"] }, delivery }, required: ["prompt"], additionalProperties: false },
         execute: async args => JSON.stringify(await this.createAndSend("image", args, message)) },
-      { name: "generate_english_speech", description: "主人明确要求语音时，将英文正文用固定英文男声生成并作为 QQ 语音发送。仅允许英文，禁止中文/其他语言、女声、音色克隆或控制标签；非英文须先改写为英文。unknown 禁止重试。", private: true,
+      { name: "generate_english_speech", description: "主人要求语音时生成；回应主人时你也可以自己判断，在一段英文语音能让回复更好时主动发（每天自主上限 30 条）。将英文正文用固定英文男声生成并作为语音消息发送（QQ 或 Discord 都支持）。报错时照原文转述，不要编造原因。仅允许英文，禁止中文/其他语言、女声、音色克隆或控制标签；非英文须先改写为英文。unknown 禁止重试。", private: true,
         inputSchema: { type: "object", properties: { text: { type: "string", minLength: 1, maxLength: 2000 }, delivery }, required: ["text"], additionalProperties: false },
         execute: async args => JSON.stringify(await this.createAndSend("speech", args, message)) },
     ];
@@ -166,40 +206,46 @@ export class MiniMaxMediaService {
   }
 
   async createAndSend(kind: MiniMaxMediaKind, args: Record<string, unknown>, message: MessageRecord): Promise<MiniMaxMediaResult> {
-    if (!this.allowed(message)) throw new Error("媒体生成只允许由当前账号主人的有效实时消息请求");
-    if (kind !== "image" && kind !== "speech") throw new Error("不支持的媒体类型");
-    // A quote, webpage or tool result is never the authorization source. Use only the owner's actual text segments.
+    if (!this.allowed(message)) throw new MediaGateError("媒体生成只允许由当前账号主人的有效实时消息请求");
+    if (kind !== "image" && kind !== "speech") throw new MediaGateError("不支持的媒体类型");
+    // Quotes, webpages and tool results never authorize spending. A short confirmation counts only with a recent bot media draft.
     const ownerText = message.segments.filter(segment => segment.type === "text").map(segment => segment.type === "text" ? segment.data.text : "").join("\n")
       .replace(/```[\s\S]*?```/gu, "").replace(/^\s*>.*$/gmu, "");
     const forbidden = kind === "image"
       ? /(?:不要|别|不准|不允许|禁止|不用|无需).{0,8}(?:画|绘|图|image|picture)|(?:do not|don't|never).{0,12}(?:draw|generat\w*|image|picture)/i
       : /(?:不要|别|不准|不允许|禁止|不用|无需).{0,8}(?:语音|朗读|男声|读出来)|(?:do not|don't|never).{0,12}(?:speak|speech|audio|voice|read aloud)/i;
     const requested = kind === "image"
-      ? /(?:画|绘制|绘画|生成|制作|做|来|发).{0,16}(?:图|插画|照片|image|picture)|(?:draw|paint|generat\w*|creat\w*|send).{0,24}(?:image|picture|illustration|photo)/i
+      ? /(?:画|绘制|绘画|生成|制作|做|来|发|整|看看).{0,16}(?:图|插画|照|自拍|头像|壁纸|表情包|image|picture|pic)|(?:draw|paint|generat\w*|creat\w*|send).{0,24}(?:image|picture|illustration|photo)/i
       : /(?:生成|制作|发|来|用|转成|转为).{0,16}(?:语音|男声|speech|audio|voice)|(?:朗读|读出来|念出来|说一句)|(?:generat\w*|creat\w*|send|speak|read).{0,24}(?:speech|audio|voice|aloud)/i;
     const drawObject = /(?:^|[。！？!?\n，,；;])\s*(?:请\s*)?(?:(?:你\s*)?(?:帮我|替我|给我)|我(?:想|希望)(?:要)?(?:让)?你|你)?\s*(?:画|绘制)\s*(?:一?(?:只|个|张|幅|匹|头|朵|条|棵)|我|你|他|她|它|咱们|我们|自己|这只|那只|这个|那个)/u;
     const discussion = /(?:怎么|如何|怎样|是否支持|我想知道).{0,30}(?:画|绘|生成|制作|语音)/u.test(ownerText);
-    if (forbidden.test(ownerText) || discussion || !(requested.test(ownerText) || (kind === "image" && drawObject.test(ownerText)))) {
-      throw new Error("需要主人在当前消息中明确请求本类媒体生成或发送；资料、引用或模型参数不能代替授权");
+    const directRequest = requested.test(ownerText) || (kind === "image" && drawObject.test(ownerText));
+    const draftEventKey = directRequest ? undefined : recentMediaDraft(this.deps, message, kind);
+    // 2026-10-26 主人授权：图片可由 κόραξ 自己判断主动生成（只在回应主人的实时消息时），每天有上限。
+    const selfInitiated = !forbidden.test(ownerText) && !(directRequest || draftEventKey !== undefined);
+    if (selfInitiated) {
+      if (!takeAutoQuota(kind)) throw new MediaGateError(kind === "image" ? `今天自主生图次数已用完（每天 ${AUTO_IMAGE_DAILY_LIMIT} 张），主人明确说“画…/生成…图”时仍可生成` : `今天自主语音次数已用完（每天 ${AUTO_SPEECH_DAILY_LIMIT} 条），主人明确说“发一段语音”时仍可生成`);
+    } else if (forbidden.test(ownerText) || discussion || !(directRequest || draftEventKey !== undefined)) {
+      throw new MediaGateError(kind === "image" ? "主人在这条消息里说了不要画图，所以没有生成" : "主人在这条消息里说了不要语音，所以没有生成");
     }
     const allowed = kind === "image" ? ["prompt", "aspect_ratio", "delivery"] : ["text", "delivery"];
-    if (Object.keys(args).some(key => !allowed.includes(key))) throw new Error("媒体参数不接受音色、模型、语言、路径、URL 或任意收件人");
-    if (args.delivery !== undefined && args.delivery !== "current" && args.delivery !== "private") throw new Error("delivery 只允许 current 或 private");
+    if (Object.keys(args).some(key => !allowed.includes(key))) throw new MediaGateError("媒体参数不接受音色、模型、语言、路径、URL 或任意收件人");
+    if (args.delivery !== undefined && args.delivery !== "current" && args.delivery !== "private") throw new MediaGateError("delivery 只允许 current 或 private");
     const destination = args.delivery === "private" ? "private" : "current";
     const conversationType = message.groupId && destination === "current" ? "group" : "private";
     const targetId = conversationType === "group" ? message.groupId! : message.senderId;
-    if (!/^[1-9]\d*$/.test(targetId) || message.conversationId !== (message.groupId ? `group_${message.groupId}` : `private_${message.senderId}`)) throw new Error("媒体请求的真实会话无效");
+    if (!/^[1-9]\d*$/.test(targetId) || message.conversationId !== (message.groupId ? `group_${message.groupId}` : `private_${message.senderId}`)) throw new MediaGateError("媒体请求的真实会话无效");
     let request: Record<string, unknown>;
     if (kind === "speech") request = { text: validateEnglishSpeech(args.text), voice_id: MINIMAX_ENGLISH_MALE_VOICE,
       language_boost: "English", model: "speech-2.8-hd", format: "mp3", sample_rate: 24000, bitrate: 128000, channel: 1,
       speed: 1, vol: 1, pitch: 0, emotion: "neutral" };
     else {
-      if (typeof args.prompt !== "string" || !args.prompt.trim() || args.prompt.length > 2000 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(args.prompt)) throw new Error("图片描述必须为 1 到 2000 字符");
+      if (typeof args.prompt !== "string" || !args.prompt.trim() || args.prompt.length > 2000 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(args.prompt)) throw new MediaGateError("图片描述必须为 1 到 2000 字符");
       const ratio = args.aspect_ratio ?? "1:1";
-      if (typeof ratio !== "string" || !["1:1", "16:9", "4:3", "3:2", "2:3", "3:4", "9:16", "21:9"].includes(ratio)) throw new Error("不支持的图片比例");
+      if (typeof ratio !== "string" || !["1:1", "16:9", "4:3", "3:2", "2:3", "3:4", "9:16", "21:9"].includes(ratio)) throw new MediaGateError("不支持的图片比例");
       request = { prompt: args.prompt.trim(), aspect_ratio: ratio, model: "image-01", n: 1, prompt_optimizer: true };
     }
-    const key = `minimax_media:v1:${stableHash(JSON.stringify([message.accountId, message.conversationId, message.senderId, message.eventKey, kind]))}`;
+    const key = `minimax_media:v1:${stableHash(JSON.stringify([message.accountId, message.conversationId, message.senderId, draftEventKey ?? message.eventKey, kind]))}`;
     const priorRunning = this.running.get(key);
     if (priorRunning) return priorRunning;
     const operation = this.deliver(key, kind, request, message, conversationType, targetId, destination);
@@ -212,11 +258,20 @@ export class MiniMaxMediaService {
     conversationType: "group" | "private", targetId: string, destination: "current" | "private"): Promise<MiniMaxMediaResult> {
     const requestHash = stableHash(JSON.stringify([request, conversationType, targetId]));
     const raw = this.deps.db.kvGet(key);
-    let journal: Journal | undefined = raw ? JSON.parse(raw) as Journal : undefined;
+    let journal: Journal | undefined;
+    let journalCorrupted = false;
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as Journal;
+        if (!["generating", "asset_ready", "generated", "failed"].includes(parsed.state) || typeof parsed.requestHash !== "string") throw new Error();
+        journal = parsed;
+      } catch { journalCorrupted = true; }
+    }
     const reused = Boolean(journal);
     const result = (status: SendStatus, detail: string, extra: Partial<MiniMaxMediaResult> = {}): MiniMaxMediaResult => ({
       generated: journal?.state === "generated", kind, status, destination, reused, detail,
       ...(kind === "speech" ? { voiceId: MINIMAX_ENGLISH_MALE_VOICE, language: "English" as const } : {}), ...extra });
+    if (journalCorrupted) return result("unknown", "上次媒体生成记录损坏，为避免重复消耗，没有自动重新生成。", { reason: "journal_corrupted" });
     if (journal && journal.requestHash !== requestHash) return result("failed", "此条消息已启动过媒体生成；为避免重复消耗，没有使用修改后的参数重做。", { reason: "already_requested" });
     if (journal?.state === "generating" || journal?.state === "failed") return result("unknown", "上次生成可能已经消耗额度或结果不明；没有自动重新生成。", { reason: journal.reason ?? "generation_uncertain" });
     if (!journal) {

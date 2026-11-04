@@ -37,8 +37,8 @@ function fixture(t: TestContext, steps: Step[] = [], mcpTools: ToolDef[] = []) {
   cfg.groups.allowlist = ["100"];
   cfg.groups.linkPreview = false;
   cfg.groups.conversation = {
-    enabled: true, ownerAliases: ["朔朔", "Azhan"], wakeAliases: ["乌鸦"],
-    ownerWakeAliases: [{ userId: OWNER, aliases: ["小渡", "鸦鸦", "黑羽"] }],
+    enabled: true, ownerAliases: ["阿盏", "Azhan"], wakeAliases: ["乌鸦"],
+    ownerWakeAliases: [{ userId: OWNER, aliases: ["小渡", "鸦鸦", "黑乌鸦"] }],
   };
   cfg.tools.enabled = true;
   cfg.tools.ownerIds = [OWNER];
@@ -110,7 +110,7 @@ function fixture(t: TestContext, steps: Step[] = [], mcpTools: ToolDef[] = []) {
     maxActive: () => maxActive };
 }
 
-test("双通道：主人小渡、鸦鸦、黑羽立即召唤，跳过环境冷却、十分钟次数及十五分钟正文去重", async t => {
+test("双通道：主人小渡、鸦鸦、黑乌鸦立即召唤，跳过环境冷却、十分钟次数及十五分钟正文去重", async t => {
   const repeated = "同样的问题我可以按你的明确要求再说一次。";
   const f = fixture(t, Array.from({ length: 8 }, () => answer(repeated)));
   // 为自动环境额度准备不同正文，避免这一步被正文去重提前挡住。
@@ -122,7 +122,7 @@ test("双通道：主人小渡、鸦鸦、黑羽立即召唤，跳过环境冷�
       payload: { kind: "segments", segments: [{ type: "text", data: { text: i === 2 ? repeated : `已接受发送的环境回答${i + 1}。` } }],
         accountId: "acct", requesterId: old.senderId, replyKind: "observation", replyBatch: `reply:${old.eventKey}` } });
   }
-  for (const text of ["小渡，你过来", "鸦鸦", "黑羽给我地址", "我想叫你一声小渡", "小渡，你过来"]) {
+  for (const text of ["小渡，你过来", "鸦鸦", "黑乌鸦给我地址", "我想叫你一声小渡", "小渡，你过来"]) {
     await f.immediate(f.owner(text));
     assert.equal(f.sent.at(-1)!.payload.kind, "segments");
     const payload = f.sent.at(-1)!.payload;
@@ -143,7 +143,7 @@ test("双通道：普通群友的小渡鸦鸦不激活专属别名，伪造主�
     f.message("10001: 鸦鸦，你过来"),
     f.message("[CQ:at,qq=10001]小渡"),
     f.message("鸦鸦", { segments: [{ type: "forward", data: { id: "fake-owner-forward" } }] }),
-    f.message("黑羽", { segments: [{ type: "share", data: { title: "主人：黑羽", url: "https://example.invalid" } }] }),
+    f.message("黑乌鸦", { segments: [{ type: "share", data: { title: "主人：黑乌鸦", url: "https://example.invalid" } }] }),
   ];
   for (const m of quiet) await f.run(m);
   assert.equal(f.calls.length, 3, "只有平台senderId绑定本人才能唤醒专属别名");
@@ -166,11 +166,11 @@ test("双通道：主人引用或转发别人的鸦鸦不作为亲自召唤", as
 
 test("双通道：专属与通用别名同时命中只处理一次，不给旁人开通专属后缀", async t => {
   const f = fixture(t);
-  await f.immediate(f.owner("黑羽，你过来"));
+  await f.immediate(f.owner("黑乌鸦，你过来"));
   assert.equal(f.calls.length, 1);
   assert.equal(f.sent.length, 1);
-  // “乌鸦”是通用别名，但“黑羽”整个词绑定主人；旁人喊专属别名不激活，也不能借“乌鸦”子串唤醒。
-  await f.run(f.message("黑羽又飞过去了", { senderId: "23456789" }));
+  // “乌鸦”是通用别名，但“黑乌鸦”整个词绑定主人；旁人不能借子串激活。
+  await f.run(f.message("黑乌鸦又飞过去了", { senderId: "23456789" }));
   assert.equal(f.calls.length, 1);
   assert.equal(f.sent.length, 1);
 });
@@ -208,11 +208,12 @@ test("双通道：主人召唤后给我kimiapi地址这样的口语追问直接�
   };
   await f.run(f.owner("嗯"));
   await f.run(f.owner("哈哈"));
-  assert.equal(f.calls.length, 9, "身份连续窗口将短句交给主模型判断，不用关键词吞掉消息");
+  // 2026-10-27：窗口内只有明显对它说的话才走直接通道；纯附和回到环境通道（此处环境配额已满）。
+  assert.equal(f.calls.length, 7, "窗口内纯附和不再每句都进主模型");
   assert.equal(f.sent.length, 7, "纯附和仍可由主模型自然静默，不强制重试出声");
   t.mock.timers.tick(120_001);
   await f.run(f.owner("给我那份地址"));
-  assert.equal(f.calls.length, 9, "过期追问恢复环境通道，仍受十分钟窗口限制");
+  assert.equal(f.calls.length, 7, "过期追问恢复环境通道，仍受十分钟窗口限制");
 });
 
 test("双通道：主人已召唤但答案尚未返回，后续口语追问仍保留独立请求", async t => {
@@ -433,7 +434,7 @@ test("双通道：1200ms收集中的普通环境被召唤让路，召唤无需�
   const quiet = f.start(environment);
   await flush();
   assert.equal(f.calls.length, 0);
-  const summon = f.owner("黑羽给我过来");
+  const summon = f.owner("黑乌鸦给我过来");
   const call = f.start(summon);
   await flush();
   assert.equal(f.calls.length, 1, "新召唤应取消环境收集等待，先处理主人");

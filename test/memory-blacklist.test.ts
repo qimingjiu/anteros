@@ -10,10 +10,11 @@ const ACCOUNT = "memory-ban-test";
 const GROUP = "100";
 const TARGET = "4455667788";
 const NORMAL = "123456789";
-const SUMMARY = "测试成员和普通成员约好周六出门。";
-const FACT = "测试成员计划周六去爬山。";
+const SUMMARY = "测试成员谈到长期喜欢的爵士音乐。";
+const EVIDENCE = "我一直喜欢听爵士音乐";
 const result = (content: string): ChatResult => ({ content, toolCalls: [], finishReason: "stop" });
-const factResult = () => result(JSON.stringify([{ subject: "测试成员", kind: "plan", statement: FACT, confidence: 0.8 }]));
+const factResult = () => result(JSON.stringify([{ sourceMessageId: "1", subjectUserId: TARGET,
+  kind: "fact", category: "preference", evidence: EVIDENCE, confidence: 0.98 }]));
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -28,7 +29,7 @@ function fixture(t: TestContext, llm: LLMClient) {
   t.after(() => { memory.stop(); db.close(); });
   const start = Date.now() - 5000;
   const records: MessageRecord[] = [
-    { senderId: TARGET, name: "测试成员", text: "我准备周六去爬山" },
+    { senderId: TARGET, name: "测试成员", text: EVIDENCE },
     { senderId: NORMAL, name: "普通成员", text: "那天我们一起出门" },
     { senderId: TARGET, name: "测试成员", text: "我打算带水" },
   ].map((record, index) => ({ eventKey: `${ACCOUNT}:group_${GROUP}:message:${index + 1}`, accountId: ACCOUNT, providerId: "fixture",
@@ -84,7 +85,7 @@ test("黑名单记忆：LLM 事实提取等待期间拉黑，旧 facts 不得写
   await finalizing;
   assert.equal(calls, 2);
   assert.equal(f.db.recentMemories(ACCOUNT, GROUP, 10).length, 0, "异步提取结果返回后必须重新检查真实黑名单");
-  assert.equal(f.db.findMemoryByStatement(ACCOUNT, GROUP, FACT), undefined);
+  assert.equal(f.db.recentMemories(ACCOUNT, GROUP, 10).some(row => row.statement.includes(EVIDENCE)), false);
   assert.equal(f.db.topicById(topicId)?.summary, null);
   assert.equal(f.db.topicById(topicId)?.participants, null);
 });
@@ -96,13 +97,13 @@ test("黑名单记忆：未被拉黑的正常话题照常保存，随后拉黑�
   await f.finalize(topicId);
   assert.equal(calls, 2);
   assert.equal(f.db.topicById(topicId)?.summary, SUMMARY);
-  const fact = f.db.findMemoryByStatement(ACCOUNT, GROUP, FACT);
+  const fact = f.db.recentMemories(ACCOUNT, GROUP, 10).find(row => row.statement.includes(EVIDENCE));
   assert.ok(fact);
   assert.equal(fact.narrator_id, TARGET);
   assert.equal(fact.subject_user_id, TARGET);
   f.db.insertMemory({ accountId: ACCOUNT, groupId: GROUP, kind: "fact", statement: "普通成员的独立事实。", narratorId: NORMAL, status: "confirmed", confidence: 1 });
   f.db.blockUser(ACCOUNT, TARGET, "malicious attack");
-  assert.equal(f.db.findMemoryByStatement(ACCOUNT, GROUP, FACT), undefined);
+  assert.equal(f.db.recentMemories(ACCOUNT, GROUP, 10).some(row => row.statement.includes(EVIDENCE)), false);
   assert.deepEqual(f.db.recentMemories(ACCOUNT, GROUP, 10).map(row => row.narrator_id), [NORMAL]);
   assert.equal(f.db.topicById(topicId)?.summary, null);
   assert.equal(f.db.topicById(topicId)?.participants, null);

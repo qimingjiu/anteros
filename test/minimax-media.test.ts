@@ -7,6 +7,7 @@ import { Database } from "../src/db/index.js";
 import type { Gateway } from "../src/gateway/index.js";
 import type { MessageRecord, SendStatus, ToolDef } from "../src/types.js";
 import { MiniMaxMediaService, MINIMAX_ENGLISH_MALE_VOICE, validateEnglishSpeech, validateMiniMaxAssetUrl } from "../src/tools/minimax-media.js";
+import { stableHash } from "../src/util/misc.js";
 
 const OWNER = "10001";
 const GROUP = "123456";
@@ -20,7 +21,7 @@ async function fixture(t: TestContext, options: { status?: SendStatus; failure?:
   const sent: SendTask[] = [];
   const calls: { name: string; args: Record<string, unknown> }[] = [];
   let downloadCalls = 0;
-  const gateway = { enqueueSend(task: SendTask) {
+  const gateway = { getProvider: () => ({ health: () => ({ selfId: "bot" }) }), enqueueSend(task: SendTask) {
     sent.push(task); const queued = db.enqueueSendTask(task);
     const status = options.status ?? "confirmed";
     if (status !== "queued") {
@@ -102,6 +103,76 @@ test("MiniMax媒体：主人群里默认发本群，private只发真实主人，
   await assert.rejects(f.service.createAndSend("speech", { text: SPEECH, target_id: "9999" }, group()));
 });
 
+test("MiniMax媒体：主人对两分钟内的媒体草稿短确认可发到群", async t => {
+  const f = await fixture(t);
+  const draftAt = new Date(Date.now() - 30_000).toISOString();
+  f.db.insertMessage(f.message({ senderId: "bot", displayNameAtTime: "bot", groupId: GROUP, conversationId: `group_${GROUP}`,
+    messageId: "speech-draft", eventKey: "sim:speech-draft", sentAt: draftAt, receivedAt: draftAt,
+    textContent: `"${SPEECH}"\n\n发到群里？`, segments: [{ type: "text", data: { text: `"${SPEECH}"\n\n发到群里？` } }] }));
+  const imageDraftAt = new Date(Date.now() - 20_000).toISOString();
+  f.db.insertMessage(f.message({ senderId: "bot", displayNameAtTime: "bot", groupId: GROUP, conversationId: `group_${GROUP}`,
+    messageId: "image-draft", eventKey: "sim:image-draft", sentAt: imageDraftAt, receivedAt: imageDraftAt,
+    textContent: "我画了一只月光下的乌鸦。发到群里？", segments: [{ type: "text", data: { text: "我画了一只月光下的乌鸦。发到群里？" } }] }));
+  const confirm = (text: string) => f.message({ groupId: GROUP, conversationId: `group_${GROUP}`, textContent: text,
+    segments: [{ type: "text", data: { text } }] });
+  assert.equal((await f.service.createAndSend("speech", { text: SPEECH }, confirm("发。"))).status, "confirmed");
+  assert.equal((await f.service.createAndSend("image", { prompt: "A raven under the moon" }, confirm("发吧"))).status, "confirmed");
+  assert.deepEqual(f.sent.map(task => [task.conversationType, task.targetId]), [["group", GROUP], ["group", GROUP]]);
+});
+
+test("MiniMax媒体：同一张媒体草稿的多次短确认只生成和投递一次", async t => {
+  const f = await fixture(t);
+  const draftAt = new Date(Date.now() - 30_000).toISOString();
+  f.db.insertMessage(f.message({ senderId: "bot", displayNameAtTime: "bot", groupId: GROUP, conversationId: `group_${GROUP}`,
+    messageId: "speech-draft", eventKey: "sim:speech-draft", sentAt: draftAt, receivedAt: draftAt,
+    textContent: `"${SPEECH}"\n\n发到群里？`, segments: [{ type: "text", data: { text: `"${SPEECH}"\n\n发到群里？` } }] }));
+  const confirm = (text: string) => f.message({ groupId: GROUP, conversationId: `group_${GROUP}`, textContent: text,
+    segments: [{ type: "text", data: { text } }] });
+  const first = await f.service.createAndSend("speech", { text: SPEECH }, confirm("发。"));
+  const second = await f.create().createAndSend("speech", { text: SPEECH }, confirm("发到群里"));
+  assert.equal(first.status, "confirmed"); assert.equal(second.status, "confirmed"); assert.equal(second.reused, true);
+  assert.equal(f.calls.filter(call => call.name === "text_to_audio").length, 1); assert.equal(f.sent.length, 1);
+});
+
+test("MiniMax媒体：非媒体回复或读不到图的回答不构成付费草稿", async t => {
+  const f = await fixture(t);
+  const insertBot = (messageId: string, text: string) => {
+    const at = new Date(Date.now() - 30_000).toISOString();
+    f.db.insertMessage(f.message({ senderId: "bot", displayNameAtTime: "bot", groupId: GROUP, conversationId: `group_${GROUP}`,
+      messageId, eventKey: `sim:${messageId}`, sentAt: at, receivedAt: at, textContent: text,
+      segments: [{ type: "text", data: { text } }] }));
+  };
+  insertBot("document-ready", "文档已生成，要发到群里吗？");
+  await assert.rejects(f.service.createAndSend("speech", { text: SPEECH }, f.message({ groupId: GROUP, conversationId: `group_${GROUP}`,
+    textContent: "好", segments: [{ type: "text", data: { text: "好" } }] })));
+  insertBot("image-unreadable", "这张图我看不到内容，请重发或描述一下。");
+  await assert.rejects(f.service.createAndSend("image", { prompt: "A raven" }, f.message({ groupId: GROUP, conversationId: `group_${GROUP}`,
+    textContent: "可以", segments: [{ type: "text", data: { text: "可以" } }] })));
+  insertBot("image-comment", "这幅画真的很精致，色彩层次分明。");
+  await assert.rejects(f.service.createAndSend("image", { prompt: "A raven" }, f.message({ groupId: GROUP, conversationId: `group_${GROUP}`,
+    textContent: "好", segments: [{ type: "text", data: { text: "好" } }] })));
+  insertBot("prompt-comment", "我把提示词精简了，prompt 更短更容易出图。");
+  await assert.rejects(f.service.createAndSend("image", { prompt: "A raven" }, f.message({ groupId: GROUP, conversationId: `group_${GROUP}`,
+    textContent: "好的", segments: [{ type: "text", data: { text: "好的" } }] })));
+  insertBot("quote-report", "报告引用 \"To be or not to be.\" 作为开头。");
+  await assert.rejects(f.service.createAndSend("speech", { text: SPEECH }, f.message({ groupId: GROUP, conversationId: `group_${GROUP}`,
+    textContent: "嗯", segments: [{ type: "text", data: { text: "嗯" } }] })));
+  assert.equal(f.calls.length, 0); assert.equal(f.sent.length, 0);
+});
+
+test("MiniMax媒体：短确认没有近期媒体草稿或草稿过期时不扣额度", async t => {
+  const f = await fixture(t);
+  const group = (text: string) => f.message({ groupId: GROUP, conversationId: `group_${GROUP}`, textContent: text,
+    segments: [{ type: "text", data: { text } }] });
+  await assert.rejects(f.service.createAndSend("speech", { text: SPEECH }, group("发。")));
+  const staleAt = new Date(Date.now() - 121_000).toISOString();
+  f.db.insertMessage(f.message({ senderId: "bot", displayNameAtTime: "bot", groupId: GROUP, conversationId: `group_${GROUP}`,
+    messageId: "stale-draft", eventKey: "sim:stale-draft", sentAt: staleAt, receivedAt: staleAt,
+    textContent: `"${SPEECH}"\n\n发到群里？`, segments: [{ type: "text", data: { text: `"${SPEECH}"\n\n发到群里？` } }] }));
+  await assert.rejects(f.service.createAndSend("speech", { text: SPEECH }, group("发到群里")));
+  assert.equal(f.calls.length, 0); assert.equal(f.sent.length, 0);
+});
+
 test("MiniMax媒体：非主人/跨账号/回填/撤回/伪造会话不能生成，工具上下文无法修改音色", async t => {
   const f = await fixture(t);
   for (const overrides of [{ senderId: "9999" }, { accountId: "other" }, { origin: "backfill" as const }, { status: "recalled" as const }, { conversationId: "group_9999" }, { interaction: "poke" as const }]) {
@@ -154,6 +225,16 @@ test("MiniMax媒体：同一事件跨实例/并发/重启只生成及投递一�
   const altered = await f.create().createAndSend("image", { prompt: "Another picture" }, message);
   assert.equal(altered.reason, "already_requested");
   assert.equal(f.calls.length, 1); assert.equal(f.sent.length, 1); assert.equal(f.downloads(), 1);
+});
+
+test("MiniMax媒体：本地生成记录损坏时按结果不明拒绝且不重新生成", async t => {
+  const f = await fixture(t);
+  const m = f.message();
+  const key = `minimax_media:v1:${stableHash(JSON.stringify([m.accountId, m.conversationId, m.senderId, m.eventKey, "speech"]))}`;
+  f.db.kvSet(key, "{broken");
+  const result = await f.service.createAndSend("speech", { text: SPEECH }, m);
+  assert.equal(result.status, "unknown"); assert.equal(result.reason, "journal_corrupted");
+  assert.equal(f.calls.length, 0); assert.equal(f.sent.length, 0);
 });
 
 test("MiniMax媒体：上游异常视为结果不明，跨实例再次调用也不自动生成，不泄漏异常细节", async t => {

@@ -30,7 +30,7 @@ function fixture(t: TestContext, settings: { steps?: Step[]; presence?: PhoneCon
   cfg.groups.allowlist = [GROUP];
   cfg.groups.linkPreview = false;
   cfg.groups.conversation = { enabled: true, ownerAliases: ["阿盏"], wakeAliases: ["乌鸦"],
-    ownerWakeAliases: [{ userId: OWNER, aliases: ["鸦鸦", "黑羽", "小渡"] }], observerCooldownMs: 30_000 };
+    ownerWakeAliases: [{ userId: OWNER, aliases: ["鸦鸦", "黑乌鸦", "小渡"] }], observerCooldownMs: 30_000 };
   cfg.tools.enabled = true;
   cfg.tools.ownerIds = [OWNER];
   cfg.admins = [OWNER];
@@ -147,6 +147,33 @@ test("戳召唤：其他人互戳、自戳、非允许群、错误账号及黑�
   assert.equal(f.calls.length, 0);
   assert.equal(f.sent.length, 0);
   assert.equal(f.ingested.length, 0);
+});
+
+test("主人被戳：群友戳主人会公开询问，不反戳、不写聊天记忆或继承工具任务", async t => {
+  const f = fixture(t, { steps: [answer("你戳她做什么？有事直接说。")] });
+  await f.immediatePoke(f.poke({ userId: MEMBER, targetId: OWNER }));
+  assert.equal(f.calls.length, 1);
+  assert.match(String(f.calls[0]!.messages[1]!.content), /戳了主人.*公开.*询问.*不.*反戳/s);
+  assert.equal(f.sent.length, 1);
+  assert.equal(f.sent[0]!.payload.kind, "segments");
+  assert.equal(f.ingested.length, 0);
+  assert.equal(f.db.recentMessages(`group_${GROUP}`, 10).length, 0);
+});
+
+test("主人被戳：同一人同群冷却六十秒，不同人或冷却后可再次询问", async t => {
+  const f = fixture(t);
+  const first = f.poke({ userId: MEMBER, targetId: OWNER });
+  await f.immediatePoke(first);
+  await f.startPoke(f.poke({ userId: MEMBER, targetId: OWNER }));
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.sent.length, 1);
+  await f.immediatePoke(f.poke({ userId: "87654321", targetId: OWNER }));
+  assert.equal(f.calls.length, 2);
+  t.mock.timers.tick(60_001);
+  await f.immediatePoke(f.poke({ userId: MEMBER, targetId: OWNER }));
+  assert.equal(f.calls.length, 3);
+  assert.equal(f.sent.length, 3);
+  assert.equal(f.sent.every(task => task.payload.kind === "segments"), true);
 });
 
 test("戳召唤：接入没有反戳能力仍及时文字回应，并不宣称已戳回", async t => {

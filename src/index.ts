@@ -3,11 +3,17 @@ import process from "node:process";
 import { loadConfig, resolveDataPath, type AppConfig } from "./config.js";
 import { Database } from "./db/index.js";
 import { OneBotProvider } from "./onebot/provider.js";
-import { Gateway } from "./gateway/index.js";
+import { RecallTools } from "./tools/recall.js";
+import { DiscordProvider } from "./discord/provider.js";
+import { MusicService } from "./discord/music.js";
+import { VoiceCallService } from "./discord/call.js";
+import type { Provider } from "./types.js";
+import { Gateway, gatewayOptionsFromConfig } from "./gateway/index.js";
 import { createLLMClient } from "./llm/index.js";
 import { ModelSwitcher } from "./llm/switcher.js";
 import { discoverModelProfiles } from "./llm/catalog.js";
 import { SqliteMemory } from "./memory/index.js";
+import { MessageRetention } from "./memory/retention.js";
 import { Agent } from "./agent/index.js";
 import { createSearchProvider } from "./tools/search.js";
 import { PageReader } from "./tools/reader.js";
@@ -18,6 +24,7 @@ import { McpManager } from "./tools/mcp.js";
 import { ReportEngine } from "./report/index.js";
 import { StatusPanel } from "./web/index.js";
 import { initLogging, logger } from "./util/logger.js";
+import { setModelTimezone } from "./util/model-time.js";
 import type { ToolDef } from "./types.js";
 import { OpenMeteoWeather } from "./tools/weather.js";
 import { ProactiveEngine } from "./proactive/index.js";
@@ -29,6 +36,7 @@ import { runtimeDiagnosticStatus, type RuntimeDiagnosticDeps } from "./diagnosti
 import { IncomingDocumentService } from "./documents/incoming.js";
 import { TaskLedger } from "./tasks/index.js";
 import { MiniMaxMediaService } from "./tools/minimax-media.js";
+import { SendImageService } from "./tools/send-image.js";
 import { MuninnMemoryService } from "./tools/muninn-memory.js";
 import { FeishuToolsService } from "./tools/feishu-tools.js";
 import { EmailService, emailConfigFromEnv } from "./tools/email.js";
@@ -57,6 +65,7 @@ async function main(): Promise<void> {
     currentStatus:request => diagnosticDeps ? runtimeDiagnosticStatus(diagnosticDeps,request) : []});
   log.info("启动 QQ 群聊机器人");
   log.info(`配置: ${configPath}（账号 ${cfg.gateway.accountId}，时区 ${cfg.timezone}）`);
+  setModelTimezone(cfg.timezone);
 
   if (cfg.groups.allowlist.length === 0) {
     log.warn("groups.allowlist 为空：不会响应任何群聊。请在 config.yaml 中填入群号。");
@@ -72,7 +81,10 @@ async function main(): Promise<void> {
   if (cfg.features?.tasks !== false) new TaskLedger(db).recoverInterrupted(cfg.gateway.accountId);
 
   // Provider + Gateway
-  const provider = new OneBotProvider({
+  const provider: Provider = cfg.gateway.provider === "discord"
+    ? new DiscordProvider({ accountId: cfg.gateway.accountId, token: cfg.gateway.discord?.token ?? "",
+        autoAllow: { ownerIds: cfg.tools.ownerIds ?? cfg.admins, allowlist: cfg.groups.allowlist } })
+    : new OneBotProvider({
     accountId: cfg.gateway.accountId,
     endpoint: cfg.gateway.onebot.endpoint,
     accessToken: cfg.gateway.onebot.accessToken,
@@ -84,11 +96,7 @@ async function main(): Promise<void> {
     groupFileAction: cfg.gateway.onebot.groupFileAction,
     historyAction: cfg.gateway.onebot.historyAction,
   });
-  const gateway = new Gateway(db, provider, {
-    accountId: cfg.gateway.accountId,
-    backfillMaxPages: cfg.gateway.onebot.backfillMaxPages,
-    backfillPageLimit: cfg.gateway.onebot.backfillPageLimit,
-  });
+  const gateway = new Gateway(db, provider, gatewayOptionsFromConfig(cfg));
   // 新锚点：每条实时群消息都更新锚点，供重连补取
   gateway.onEvent((ev) => {
     if (ev.kind === "message" && ev.message.groupId && ev.message.origin === "live") {
@@ -131,10 +139,31 @@ async function main(): Promise<void> {
     providerOutputDir: cfg.documents.providerOutputDir,
     waitTimeoutMs: Math.min(60000, cfg.gateway.onebot.requestTimeoutMs + 1500),
   }) : null;
+  const music = provider instanceof DiscordProvider ? new MusicService({
+    getClient: () => provider.getClient(), accountId: cfg.gateway.accountId, ownerIds: cfg.tools.ownerIds ?? cfg.admins,
+    apiBase: process.env.NCM_API_BASE ?? "http://127.0.0.1:3010", cookieFile: path.join(baseDir, "data/discord/ncm.cookie"),
+    sendImage: (t, b64, text) => {
+      const segs = [{ type: "text" as const, data: { text } }, { type: "image" as const, data: { file: `base64://${b64}` } }];
+      return t.groupId ? provider.sendGroupMsg(t.groupId, segs as any) : provider.sendPrivateMsg(t.userId, segs as any);
+    },
+  }) : null;
+  const voiceCall = music && process.env.SORA_API_KEY && process.env.MINIMAX_API_KEY ? new VoiceCallService({
+    getClient: () => (provider as DiscordProvider).getClient(), accountId: cfg.gateway.accountId, ownerIds: cfg.tools.ownerIds ?? cfg.admins,
+    personaFile: path.join(baseDir, "persona.md"),
+    llm: { baseUrl: process.env.CALL_LLM_BASE ?? "https://api.usora.net/v1", apiKey: process.env.SORA_API_KEY, model: process.env.CALL_LLM_MODEL ?? "times/gemini-3.8-flash-compat,gemini-3.8-flash-high,times/gemini-3.8-flash" },
+    tts: { host: process.env.MINIMAX_API_HOST ?? "https://api.minimaxi.com", apiKey: process.env.MINIMAX_API_KEY, voiceId: "English_Gentle-voiced_man", model: process.env.CALL_TTS_MODEL ?? "speech-2.8-hd" },
+    restoreMusic: (gid) => music.resubscribe(gid),
+    db, selfId: () => provider.health().selfId,
+    music: { play: (m, x) => music.play(m, x), control: (m, x) => music.control(m, x) },
+  }) : null;
   const minimaxMedia = cfg.tools.enabled && cfg.tools.minimax?.enabled ? new MiniMaxMediaService({
     db,gateway,mcp,accountId:cfg.gateway.accountId,ownerIds:cfg.tools.ownerIds ?? cfg.admins,
     outputDir:path.join(resolveDataPath(baseDir,cfg.documents?.outputDir ?? "data/documents"),"media"),
     providerOutputDir:cfg.documents?.providerOutputDir ? path.posix.join(cfg.documents.providerOutputDir,"media") : undefined,
+    waitTimeoutMs:Math.min(60000,cfg.gateway.onebot.requestTimeoutMs+1500),
+  }) : null;
+  const sendImage = cfg.tools.enabled ? new SendImageService({
+    db,gateway,accountId:cfg.gateway.accountId,ownerIds:cfg.tools.ownerIds ?? cfg.admins,
     waitTimeoutMs:Math.min(60000,cfg.gateway.onebot.requestTimeoutMs+1500),
   }) : null;
   const muninnMemory = cfg.tools.enabled && cfg.tools.muninn?.enabled ? new MuninnMemoryService({
@@ -145,11 +174,19 @@ async function main(): Promise<void> {
   }) : null;
   const email = cfg.tools.enabled && cfg.tools.email?.enabled ? new EmailService({
     db,accountId:cfg.gateway.accountId,ownerIds:cfg.tools.ownerIds ?? cfg.admins,config:emailConfigFromEnv(),
+    recentTexts:(conversationId:string,senderIds:string[],limit:number)=>{
+      const self=provider.health().selfId; const ids=[...senderIds, ...(self?[String(self)]:[])];
+      if(!ids.length) return [];
+      const rows=db.db.prepare(`SELECT sender_id, text_content FROM (SELECT sender_id, text_content FROM messages WHERE account_id=? AND conversation_id=? AND status='active' ORDER BY id DESC LIMIT ?) WHERE sender_id IN (${ids.map(()=>"?").join(",")})`)
+        .all(cfg.gateway.accountId, conversationId, limit, ...ids) as {sender_id:string;text_content:string}[];
+      return rows.map(r=>r.text_content);
+    },
   }) : null;
 
   // 记忆
   const memory = cfg.memory.enabled
-    ? new SqliteMemory(db, cfg.memory, modelSwitcher ?? llm, cfg.model.summaryModel || undefined)
+    ? new SqliteMemory(db, cfg.memory, modelSwitcher ?? llm, cfg.model.summaryModel || undefined,
+      { selfId: () => provider.health().selfId })
     : null;
   memory?.start();
 
@@ -157,6 +194,8 @@ async function main(): Promise<void> {
   if (cfg.groups.conversation?.enabled !== false) log.info("群聊由当前主模型决定回复或静默，独立判断模型已停用");
   const presence = new PhonePresenceService(cfg.presence);
   const proactiveEngine = new ProactiveEngine({db, cfg, gateway, llm: modelSwitcher ?? llm, weather, presence});
+  // Custom status: apply once logged in, and re-apply every 10 min (survives reconnects).
+  if (music) { const applyStatus = () => { try { music.updatePresence(); } catch { /* not ready */ } }; setTimeout(applyStatus, 8000); setInterval(applyStatus, 600_000); }
   diagnosticDeps = {cfg,db,gateway,mcp,presence,proactive:proactiveEngine,searchReady:Boolean(search),
     readerReady:Boolean(reader),documentsReady:Boolean(documentDelivery),weatherReady:Boolean(weather),research,notion,notionReminders,email};
   const agent = new Agent({
@@ -180,13 +219,16 @@ async function main(): Promise<void> {
     notionReminders,
     incomingDocuments,
     minimaxMedia,
+    sendImage,
     muninnMemory,
     feishuTools,
     email,
+    recall: new RecallTools({ provider, db, ownerIds: (cfg.tools.ownerIds ?? cfg.admins).map(String) }),
+    music: music ? { toolsFor: (m: any) => [...music.toolsFor(m), ...(voiceCall?.toolsFor(m) ?? [])] } : null,
   });
 
   // 日报
-  const reportEngine = new ReportEngine(db, cfg.reports, cfg.timezone, gateway, cfg.reports.enabled ? (modelSwitcher ?? llm) : null);
+  const reportEngine = new ReportEngine(db, cfg.reports, cfg.timezone, gateway, (modelSwitcher ?? llm));
   agent.setReportEngine(reportEngine);
   gateway.onEvent((ev) => {
     if (ev.kind === "message" && ev.message.groupId && cfg.groups.allowlist.includes(ev.message.groupId)) {
@@ -204,16 +246,8 @@ async function main(): Promise<void> {
   agent.attach();
   gateway.start();
 
-  // 消息保留清理：每天一次
-  const retentionTimer = setInterval(() => {
-    try {
-      const n = db.purgeOldMessages(cfg.memory.rawRetentionDays);
-      if (n > 0) log.info(`清理 ${n} 条过期消息（保留 ${cfg.memory.rawRetentionDays} 天）`);
-    } catch (e) {
-      log.error("消息清理失败", e);
-    }
-  }, 6 * 3600_000);
-  retentionTimer.unref?.();
+  const messageRetention = new MessageRetention({ db, memory, config: cfg.memory, timezone: cfg.timezone });
+  messageRetention.start();
 
   reportEngine.start();
   proactiveEngine.start();
@@ -229,7 +263,7 @@ async function main(): Promise<void> {
       reportEngine.stop();
       await proactiveEngine.stop();
       await notionReminders?.stop();
-      retentionTimer.unref?.();
+      await messageRetention.stop();
       memory?.stop();
       await mcp.stop();
       await panel.stop();

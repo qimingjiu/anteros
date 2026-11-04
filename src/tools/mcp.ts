@@ -1,10 +1,17 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import type { McpServerConfig } from "../config.js";
-import type { ToolDef, ToolParamSchema, ToolContext } from "../types.js";
+import type { ToolDef, ToolParamSchema, ToolContext, ToolImage } from "../types.js";
 import { logger } from "../util/logger.js";
 
 const log = logger("mcp");
 const PROTOCOL_VERSION = "2024-11-05";
+const MAX_MCP_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_MCP_IMAGES = 4;
+const MCP_IMAGE_MIME_TYPES = new Set<string>(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+
+function isMcpImageMime(value: unknown): value is ToolImage["mimeType"] {
+  return typeof value === "string" && MCP_IMAGE_MIME_TYPES.has(value);
+}
 
 /**
  * 最小 MCP 客户端（v1，实验性）：
@@ -96,19 +103,51 @@ abstract class McpConnection {
     return tools;
   }
 
-  async callTool(name: string, args: Record<string, unknown>, timeoutMs: number): Promise<string> {
+  async callTool(name: string, args: Record<string, unknown>, timeoutMs: number): Promise<{ text: string; images: ToolImage[] }> {
     const resp = await this.rpc("tools/call", { name, arguments: args }, timeoutMs);
     if (resp.error) throw new Error(`工具 ${name} 调用失败: ${resp.error.message}`);
-    const result = resp.result as { content?: { type: string; text?: string }[]; isError?: boolean } | undefined;
-    const texts = (result?.content ?? [])
+    const result = resp.result as { content?: { type: string; text?: string; data?: string; mimeType?: string }[]; isError?: boolean } | undefined;
+    const content = result?.content ?? [];
+    const texts = content
       .filter((c) => c.type === "text" && c.text)
       .map((c) => c.text!);
+    const images: ToolImage[] = [];
+    let droppedImages = 0;
+    for (const c of content) {
+      if (c.type !== "image") continue;
+      if (images.length >= MAX_MCP_IMAGES || !isMcpImageMime(c.mimeType) || typeof c.data !== "string" || !c.data.trim()) {
+        droppedImages++;
+        continue;
+      }
+      // 以解码后的字节数限制大小，不能用 base64 字符串长度代替。
+      const bytes = Buffer.from(c.data, "base64");
+      if (!bytes.byteLength || bytes.byteLength > MAX_MCP_IMAGE_BYTES) {
+        droppedImages++;
+        continue;
+      }
+      images.push({ data: c.data, mimeType: c.mimeType });
+    }
     const joined = texts.join("\n") || "(工具无文本输出)";
-    if (result?.isError) throw new Error(joined);
-    return joined;
+    const text = droppedImages
+      ? `${joined}\n（因格式不支持、解码失败、单张超过 4MB 或单次最多 4 张，已丢弃 ${droppedImages} 张图片）`
+      : joined;
+    if (result?.isError) throw new Error(text);
+    return { text, images };
   }
 
   abstract close(): Promise<void>;
+}
+
+function spawnStdio(cfg: McpServerConfig): ChildProcess {
+  const options = {
+    stdio: ["pipe", "pipe", "pipe"] as ["pipe", "pipe", "pipe"],
+    env: { ...process.env, ...(cfg.env ?? {}) },
+  };
+  // Windows 的 npx/npm/pnpm/yarn 是 .cmd 包装；直接 spawn 会 ENOENT/EINVAL。
+  if (process.platform === "win32" && /^(?:npx|npm|pnpm|yarn)$/i.test(cfg.command!)) {
+    return spawn(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", cfg.command!, ...(cfg.args ?? [])], options);
+  }
+  return spawn(cfg.command!, cfg.args ?? [], options);
 }
 
 class StdioMcpConnection extends McpConnection {
@@ -119,7 +158,7 @@ class StdioMcpConnection extends McpConnection {
   constructor(private cfg: McpServerConfig, private rootLog = log) {
     super();
     if (!cfg.command) throw new Error(`MCP 服务器 ${cfg.name} 缺少 command`);
-    this.child = spawn(cfg.command, cfg.args ?? [], { stdio: ["pipe", "pipe", "pipe"] });
+    this.child = spawnStdio(cfg);
     this.child.stdout!.setEncoding("utf-8");
     this.child.stdout!.on("data", (chunk: string) => {
       this.buffer += chunk;
@@ -305,7 +344,14 @@ function mayReplay(body: JsonRpcReq, serverName: string): boolean {
   // Explicitly reviewed readonly commerce tools; arbitrary mutations are never replayed.
   return serverName === "cn-scraper" && body.method === "tools/call"
     && ["taobao_search", "jd_search", "taobao_product", "jd_product",
-      "dianping_search", "dianping_shop", "dianping_reviews"].includes(String(body.params?.name));
+      "dianping_search", "dianping_shop", "dianping_reviews", "bilibili_search"].includes(String(body.params?.name))
+    // xnews is a read-only X reader; its sessions idle out, so replay after renewal.
+    || serverName === "xnews" && body.method === "tools/call"
+    && ["x_search", "x_user_tweets", "x_tweet", "x_list", "x_trends"].includes(String(body.params?.name))
+    // amap (高德) tools are all read-only lookups.
+    || serverName === "amap" && body.method === "tools/call"
+    || serverName === "taobao" && body.method === "tools/call"
+    && ["taobao_search", "taobao_product"].includes(String(body.params?.name));
 }
 
 /** cn-scraper returns application failures as JSON text without MCP isError. */
@@ -554,11 +600,12 @@ export class McpManager {
               const c = this.connections.get(s.name);
               if (!c || !c.canRequest()) throw new Error(`MCP 服务器 ${s.name} 未连接`);
               const output = await c.callTool(t.name, args, this.cfg.callTimeoutMs);
-              if (s.name === "cn-scraper" && cnScraperFailure(output)) {
+              if (s.name === "cn-scraper" && cnScraperFailure(output.text)) {
                 // A website failure is not a broken MCP connection and must never trigger replay.
-                throw new Error(`cn-scraper 网站工具失败: ${safeMcpError(output, s)}`);
+                throw new Error(`cn-scraper 网站工具失败: ${safeMcpError(output.text, s)}`);
               }
-              return output;
+              if (output.images.length) ctx.onImages?.(output.images);
+              return output.text;
             },
           };
           if (this.toolAllowed(def)) this.tools.push(def);

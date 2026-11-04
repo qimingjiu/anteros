@@ -46,9 +46,11 @@ export class ReportEngine {
   }
 
   start(): void {
-    if (!this.cfg.enabled) return;
-    this.timer = setInterval(() => this.cronTick(), 20_000);
-    this.timer.unref?.();
+    if (this.cfg.enabled) {
+      this.timer = setInterval(() => this.cronTick(), 20_000);
+      this.timer.unref?.();
+    }
+    // 投递循环始终运行：定时日报关闭时，管理员按需 /日报 也要能收到文件
     this.deliveryTimer = setInterval(() => this.deliveryTick(), 30_000);
     this.deliveryTimer.unref?.();
     // 启动时立即执行一次投递检查，恢复中断的投递
@@ -155,7 +157,7 @@ export class ReportEngine {
     const now = new Date().toISOString();
 
     const existing = this.db.reportByKey(reportKey);
-    if (existing?.status === "generated" && existing.file_path && fs.existsSync(existing.file_path)) {
+    if (existing?.status === "generated" && existing.file_path && fs.existsSync(existing.file_path) && period !== "today_until_run") {
       return {
         ok: true,
         reportKey,
@@ -386,12 +388,18 @@ export class ReportEngine {
         if (!report?.file_path) continue;
         const taskKey = `report_delivery:${d.report_key}:${d.recipient_id}:a${d.attempts}`;
         const fileName = path.basename(report.file_path);
+        // SnowLuma 在容器里：宿主 /opt/snowluma-docker/data 映射为 /app/data，文件需对容器可读
+        let sendPath = report.file_path;
+        if (sendPath.startsWith("/opt/snowluma-docker/data/")) {
+          try { fs.chmodSync(sendPath, 0o644); } catch { /* ignore */ }
+          sendPath = "/app/data/" + sendPath.slice("/opt/snowluma-docker/data/".length);
+        }
         const enq = this.gateway.enqueueSend({
           taskKey,
           kind: "report_file",
           conversationType: "private",
           targetId: d.recipient_id,
-          payload: { kind: "file", filePath: report.file_path, fileName },
+          payload: { kind: "file", filePath: sendPath, fileName },
         });
         if (enq.reused) {
           const t = this.db.sendTaskById(enq.id);

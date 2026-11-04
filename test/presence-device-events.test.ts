@@ -11,7 +11,7 @@ import { EVENTTAP_FIELDS, PHONE_FIELDS, formatPhoneContext, parsePhoneSnapshot }
 
 const NOW = Date.parse("2026-10-14T01:00:00+08:00");
 const OWNER = "10001";
-const LABEL = "azhan";
+const LABEL = "owner";
 const DEVICE = "phone-main";
 const cfg: PhonePresenceConfig = { enabled: true, source: "device_events", sourceOwner: LABEL,
   supabaseUrl: "https://test.supabase.co", serverKey: "sb_secret_server_only", ownerId: OWNER, deviceId: DEVICE,

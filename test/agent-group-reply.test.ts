@@ -32,7 +32,7 @@ function fixture(t: TestContext) {
   cfg.gateway.accountId = "acct";
   cfg.groups.allowlist = ["100"];
   cfg.groups.linkPreview = false;
-  cfg.groups.conversation = { enabled: true, ownerAliases: ["朔朔", "小月亮"] };
+  cfg.groups.conversation = { enabled: true, ownerAliases: ["阿盏", "小月亮"] };
   cfg.tools.enabled = true;
   cfg.tools.ownerIds = [OWNER];
   cfg.admins = [OWNER];
@@ -172,7 +172,7 @@ test("自主群聊：别人 @ 主人或完整名字属于环境观察，保留�
   for (const explicit of [true, false]) {
     const f = fixture(t);
     f.agent.groupChains.set("100", Promise.resolve());
-    const m = f.message(explicit ? "找你问个事" : "朔朔在吗", explicit ? {
+    const m = f.message(explicit ? "找你问个事" : "阿盏在吗", explicit ? {
       segments: [{ type: "at", data: { qq: OWNER } }, { type: "text", data: { text: "找你问个事" } }],
     } : {});
     await f.agent.onMessage(m);

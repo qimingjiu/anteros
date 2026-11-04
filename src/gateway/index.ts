@@ -6,6 +6,7 @@ import type {
   SendResult,
   PokeEvent,
 } from "../types.js";
+import type { AppConfig } from "../config.js";
 import type { Database, DBRow_Message } from "../db/index.js";
 import { segmentsText } from "../onebot/provider.js";
 import { logger } from "../util/logger.js";
@@ -32,9 +33,27 @@ export interface GatewayStats {
   lastEventAt?: string;
 }
 
+export interface GatewayOptions {
+  accountId: string;
+  backfillMaxPages: number;
+  backfillPageLimit: number;
+  pokeOwnerIds?: string[];
+}
+
+export function gatewayOptionsFromConfig(cfg: Pick<AppConfig, "gateway" | "tools" | "admins">): GatewayOptions {
+  return {
+    accountId: cfg.gateway.accountId,
+    backfillMaxPages: cfg.gateway.onebot.backfillMaxPages,
+    backfillPageLimit: cfg.gateway.onebot.backfillPageLimit,
+    pokeOwnerIds: cfg.tools.ownerIds ?? cfg.admins,
+  };
+}
+
 export class Gateway {
   private db: Database;
   private provider: Provider;
+  /** 会话静默（主人说闭嘴）期间拦截一切待发消息，含定时/报告/进度。 */
+  private sendHold?: (conversationType: "group" | "private", targetId: string) => boolean;
   private accountId: string;
   private subscribers: ((ev: GatewayEvent) => void)[] = [];
   private queueRunning = false;
@@ -52,14 +71,16 @@ export class Gateway {
   private backfillMaxPages: number;
   private backfillPageLimit: number;
   private stopped = false;
+  private pokeOwnerIds: Set<string>;
 
-  constructor(db: Database, provider: Provider, opts: { accountId: string; backfillMaxPages: number; backfillPageLimit: number }) {
+  constructor(db: Database, provider: Provider, opts: GatewayOptions) {
     this.db = db;
     this.provider = provider;
     this.accountId = opts.accountId;
     this.backfillEnabled = opts.backfillMaxPages > 0;
     this.backfillMaxPages = opts.backfillMaxPages;
     this.backfillPageLimit = opts.backfillPageLimit;
+    this.pokeOwnerIds = new Set(opts.pokeOwnerIds ?? []);
   }
 
   start(): void {
@@ -166,10 +187,10 @@ export class Gateway {
     const sentAt = Date.parse(ev.sentAt);
     const receivedAt = Date.parse(ev.receivedAt);
     const now = Date.now();
-    // An outgoing poke's notice is feedback, never another summon. Events
-    // between other members also never enter the agent's reply channel.
+    const ownerPoke = Boolean(ev.groupId && this.pokeOwnerIds.has(ev.targetId) && ev.userId !== ev.targetId);
+    // Outgoing poke feedback and unrelated member-to-member pokes never wake the agent.
     if (ev.accountId !== this.accountId || ev.providerId !== this.provider.providerId || ev.origin !== "live"
-      || !selfId || ev.targetId !== selfId || ev.userId === selfId
+      || !selfId || ev.targetId !== selfId && !ownerPoke || ev.userId === selfId
       || !/^[1-9]\d*$/.test(ev.userId) || !/^[1-9]\d*$/.test(ev.targetId)
       || (ev.groupId !== undefined && !/^[1-9]\d*$/.test(ev.groupId))
       || ev.conversationId !== (ev.groupId ? `group_${ev.groupId}` : `private_${ev.userId}`)
@@ -194,6 +215,8 @@ export class Gateway {
   }
 
   // ---------- 发送侧 ----------
+
+  setSendHold(fn: (conversationType: "group" | "private", targetId: string) => boolean): void { this.sendHold = fn; }
 
   /** 排队发送（幂等：taskKey 相同不会重复入队） */
   enqueueSend(t: {
@@ -283,6 +306,11 @@ export class Gateway {
     if ((payload.kind === "segments" || payload.kind === "poke") && payload.expiresAt && Date.parse(payload.expiresAt) <= Date.now()) {
       this.db.finishSendTask(taskId, "failed", "消息已过时，取消投递");
       log.info(`发送任务 #${taskId} 已过时，取消投递`);
+      return;
+    }
+    if (this.sendHold?.(t.conversation_type as "group" | "private", t.target_id)) {
+      this.db.finishSendTask(taskId, "failed", "会话静默中（主人要求闭嘴），取消投递");
+      log.info(`发送任务 #${taskId} 因会话静默取消投递`);
       return;
     }
     this.db.bumpSendTaskAttempt(taskId);

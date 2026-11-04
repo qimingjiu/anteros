@@ -101,16 +101,16 @@ test("早于已完成回复的环境消息包括别人提及主人都被抛弃�
 test("重复提及主人先检查同人同意图，换人或新意图仍服从环境冷却，明确召唤豁免", () => {
   let now = 1_000_000;
   const limits = new ConversationReplyLimits({ now: () => now });
-  const mention = request({ kind: "owner_mention", text: "朔朔，在吗？" });
-  limits.recordReply(mention, "你找朔朔有什么事？");
+  const mention = request({ kind: "owner_mention", text: "阿盏，在吗？" });
+  limits.recordReply(mention, "你找阿盏有什么事？");
   now += 1000;
-  assert.deepEqual(limits.canStart({ ...mention, receivedAt: now, text: "朔朔在吗!" }),
+  assert.deepEqual(limits.canStart({ ...mention, receivedAt: now, text: "阿盏在吗!" }),
     { allowed: false, reason: "repeated_owner_mention" });
   assert.deepEqual(limits.canStart({ ...mention, receivedAt: now, senderId: "54321" }), { allowed: false, reason: "cooldown" });
-  assert.deepEqual(limits.canStart({ ...mention, receivedAt: now, text: "朔朔下午要交的文档准备好了吗" }), { allowed: false, reason: "cooldown" });
+  assert.deepEqual(limits.canStart({ ...mention, receivedAt: now, text: "阿盏下午要交的文档准备好了吗" }), { allowed: false, reason: "cooldown" });
   assert.deepEqual(limits.canStart({ ...mention, receivedAt: now, kind: "direct" }), { allowed: true });
   now += 29_000;
-  assert.deepEqual(limits.canStart({ ...mention, receivedAt: now, text: "朔朔下午要交的文档准备好了吗" }), { allowed: true });
+  assert.deepEqual(limits.canStart({ ...mention, receivedAt: now, text: "阿盏下午要交的文档准备好了吗" }), { allowed: true });
   assert.deepEqual(limits.canStart({ ...mention, receivedAt: now }), { allowed: false, reason: "repeated_owner_mention" });
   now += 15_000;
   assert.deepEqual(limits.canStart({ ...mention, receivedAt: now }), { allowed: true });
@@ -120,7 +120,7 @@ test("别人提及主人与普通观察共享十分钟配额，机器人召唤�
   let now = 1_000_000;
   const limits = new ConversationReplyLimits({ now: () => now });
   for (const kind of ["owner_mention", "observation", "owner_mention"] as const) {
-    const input = request({ kind, receivedAt: now, text: `朔朔新问题${now}` });
+    const input = request({ kind, receivedAt: now, text: `阿盏新问题${now}` });
     assert.deepEqual(limits.canStart(input), { allowed: true });
     limits.recordReply(input, `环境回答${now}`);
     now += 60_000;
@@ -191,10 +191,10 @@ test("最新答复快照包括原请求人并隔离会话，读返回值不能�
   const limits = new ConversationReplyLimits({ now: () => now });
   limits.recordReply(request({ kind: "direct", senderId: "12345" }), firstReply);
   now += 1000;
-  limits.recordReply(request({ kind: "owner_mention", senderId: "54321" }), "你找朔朔有什么事？");
+  limits.recordReply(request({ kind: "owner_mention", senderId: "54321" }), "你找阿盏有什么事？");
   const snapshot = limits.recentReplies("account", "group_100");
   assert.deepEqual(snapshot, [
-    { text: "你找朔朔有什么事？", sentAt: now, kind: "owner_mention", senderId: "54321" },
+    { text: "你找阿盏有什么事？", sentAt: now, kind: "owner_mention", senderId: "54321" },
     { text: firstReply, sentAt: now - 1000, kind: "direct", senderId: "12345" },
   ]);
   snapshot[1]!.text = "被外部改写";

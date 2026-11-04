@@ -108,6 +108,8 @@ export interface Provider {
   sendPrivateFile?(userId: string, filePath: string, fileName: string): Promise<SendResult>;
   sendGroupFile?(groupId: string, filePath: string, fileName: string): Promise<SendResult>;
   sendPoke?(userId: string, groupId?: string): Promise<SendResult>;
+  /** Take back a sent message (OneBot delete_msg / Discord delete). */
+  deleteMessage?(t: { conversationId: string; groupId?: string; userId?: string; messageId: string }): Promise<{ ok: true } | { ok: false; error: string }>;
   /** Resolve a protocol-issued file ID; never return a local server path. */
   resolveIncomingFile?(file: { fileId: string; groupId?: string; userId?: string; busId?: number }): Promise<
     { ok: true; url: string } | { ok: false; error: string }
@@ -144,6 +146,11 @@ export interface ToolParamSchema {
   [k: string]: unknown;
 }
 
+export interface ToolImage {
+  data: string;
+  mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+}
+
 export interface ToolDef {
   name: string;
   description: string;
@@ -158,6 +165,8 @@ export interface ToolContext {
   groupId?: string;
   requesterId?: string;
   isPrivate: boolean;
+  /** 单次调用的图片旁路；由调用方用独立闭包接收，避免并发会话串图。 */
+  onImages?: (images: ToolImage[]) => void;
 }
 
 export interface MemoryFact {
