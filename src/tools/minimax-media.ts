@@ -274,6 +274,32 @@ export class MiniMaxMediaService {
     if (journalCorrupted) return result("unknown", "上次媒体生成记录损坏，为避免重复消耗，没有自动重新生成。", { reason: "journal_corrupted" });
     if (journal && journal.requestHash !== requestHash) return result("failed", "此条消息已启动过媒体生成；为避免重复消耗，没有使用修改后的参数重做。", { reason: "already_requested" });
     if (journal?.state === "generating" || journal?.state === "failed") return result("unknown", "上次生成可能已经消耗额度或结果不明；没有自动重新生成。", { reason: journal.reason ?? "generation_uncertain" });
+    if (!journal && kind === "speech" && process.env.ELEVENLABS_API_KEY) {
+      // 2026-11-05 主人要求：语音改用 ElevenLabs（音色 ELEVENLABS_VOICE_ID），仍只准英文（validateEnglishSpeech 已在上游把关）。
+      journal = { state: "generating", requestHash };
+      this.deps.db.kvSet(key, JSON.stringify(journal));
+      try {
+        const voice = process.env.ELEVENLABS_VOICE_ID || "TzO3xFFBbgloRWfwBLtY";
+        const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`, {
+          method: "POST", headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY, "content-type": "application/json", accept: "audio/mpeg" },
+          body: JSON.stringify({ text: String(request.text), model_id: process.env.ELEVENLABS_MODEL || "eleven_multilingual_v2" }),
+          signal: AbortSignal.timeout(60000) });
+        if (!r.ok) throw new Error(`elevenlabs_http_${r.status}`);
+        const bytes = Buffer.from(await r.arrayBuffer());
+        if (bytes.length < 1000 || bytes.length > 16 * 1024 * 1024) throw new Error("elevenlabs_bad_size");
+        const relativeDir = `media-${stableHash(key)}`;
+        const absoluteDir = path.join(this.deps.outputDir, relativeDir);
+        await fs.mkdir(absoluteDir, { recursive: true, mode: 0o700 });
+        const filename = "english-male-speech.mp3";
+        await fs.writeFile(path.join(absoluteDir, filename), bytes, { mode: 0o600 });
+        journal = { state: "generated", requestHash, artifact: { filename, bytes: bytes.length, relativePath: path.join(relativeDir, filename) } };
+        this.deps.db.kvSet(key, JSON.stringify(journal));
+      } catch (e) {
+        journal = { state: "failed", requestHash, reason: "generation_uncertain" };
+        this.deps.db.kvSet(key, JSON.stringify(journal));
+        return result("unknown", `ElevenLabs 语音生成失败（${(e as Error).message}）；为避免重复消耗额度，没有自动重试。`, { reason: "generation_uncertain" });
+      }
+    }
     if (!journal) {
       const backend = this.deps.mcp.getTools().find(tool => tool.name === `mcp__minimax__${kind === "image" ? "text_to_image" : "text_to_audio"}`);
       if (!backend) return result("failed", "MiniMax 生成工具尚未连接，未提交生成请求。", { reason: "unavailable" });

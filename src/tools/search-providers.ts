@@ -1,7 +1,7 @@
 import { isIP } from "node:net";
 import { canonicalUrl } from "./research.js";
 
-export type SearchBackendName = "searxng" | "tavily" | "exa" | "google_cse";
+export type SearchBackendName = "searxng" | "tavily" | "exa" | "google_cse" | "you";
 
 export interface SearchResult {
   title: string;
@@ -14,6 +14,7 @@ export interface SearchBackendSettings {
   searxngUrl?: string;
   tavilyApiKey?: string;
   exaApiKey?: string;
+  youApiKey?: string;
   googleCse?: { apiKey: string; cx: string };
 }
 
@@ -191,6 +192,10 @@ export function createSearchBackend(
       if (!settings.exaApiKey) return null;
       endpoint = "https://api.exa.ai/search";
       break;
+    case "you":
+      if (!settings.youApiKey) return null;
+      endpoint = "https://ydc-index.io/v1/search";
+      break;
     case "google_cse":
       if (!settings.googleCse?.apiKey || !settings.googleCse.cx) return null;
       endpoint = "https://www.googleapis.com/customsearch/v1";
@@ -223,6 +228,12 @@ export function createSearchBackend(
           // Search metadata only. Do not request contents/livecrawl, synthesized output or research.
           request.body = JSON.stringify({ query, type: "auto", numResults: count });
           break;
+        case "you":
+          request.method = "POST";
+          request.headers = { "Content-Type": "application/json", "X-API-Key": settings.youApiKey! };
+          // Snippets only (cheapest tier); no extraction/livecrawl.
+          request.body = JSON.stringify({ query, count });
+          break;
         case "google_cse": {
           const googleUrl = new URL(endpoint);
           googleUrl.searchParams.set("key", settings.googleCse!.apiKey);
@@ -245,6 +256,12 @@ export function createSearchBackend(
         if (error instanceof SearchBackendError) throw error;
         // Fetch/JSON errors may include full request URLs, query text or headers.
         throw new SearchBackendError(name, signal.aborted ? "timeout" : "network");
+      }
+      if (name === "you") {
+        const r = (json.results ?? {}) as Record<string, unknown>;
+        const raw = [...(Array.isArray(r.web) ? r.web : []), ...(Array.isArray(r.news) ? r.news : [])] as Record<string, unknown>[];
+        const items = raw.map(x => ({ ...x, _snippet: typeof x.description === "string" && x.description ? x.description : Array.isArray(x.snippets) ? x.snippets.filter(v => typeof v === "string").join(" ") : "" }));
+        return normalizeSearchResults(items, name, count, { snippet: "_snippet" });
       }
       const items = name === "google_cse" ? (json.items ?? []) : json.results;
       if (!Array.isArray(items) || json.error) throw new SearchBackendError(name, "invalid_response");

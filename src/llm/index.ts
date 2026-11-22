@@ -241,6 +241,8 @@ export class OpenAICompatibleClient implements LLMClient {
       const endpoint = new URL(this.cfg.baseUrl);
       const moonshot = endpoint.protocol === "https:"
         && ["api.moonshot.cn", "api.moonshot.ai"].includes(endpoint.hostname.toLowerCase());
+      // 2026-11-17 火山方舟 Agent Plan：取不到 QQ 图片外链，需内联；kimi 只允许 temperature=1
+      const volcArk = endpoint.hostname.toLowerCase() === "ark.cn-beijing.volces.com";
       if (moonshot) {
         failureCode = "REQUEST_QUEUE_ERROR";
         releaseRequestSlot = await acquireOfficialRequestSlot(this.cfg.baseUrl, this.cfg.apiKey, externalSignal);
@@ -251,7 +253,7 @@ export class OpenAICompatibleClient implements LLMClient {
       timer = setTimeout(() => ctrl.abort(), this.cfg.requestTimeoutMs);
       // Model-facing times are local (e.g. "10-28 16:54"); DB keeps ISO UTC.
       let prepared = localizeMessages(messages);
-      if (moonshot && imageReceipt) {
+      if ((moonshot || volcArk || this.cfg.baseUrl.includes("127.0.0.1:3018")) && imageReceipt) {
         failureCode = "IMAGE_INPUT_ERROR";
         prepared = await this.imageInputs.inlineMessages(prepared, ctrl.signal);
         const actual = imageRequestReceipt(prepared, model, opts?.imageContextId)!;
@@ -264,7 +266,7 @@ export class OpenAICompatibleClient implements LLMClient {
       };
       // Official Kimi models have fixed sampling parameters. Let the provider
       // choose its documented defaults instead of forwarding generic overrides.
-      const fixedSampling = moonshot && /^kimi-k(?:3|2\.(?:5|6)|2\.7-code(?:-highspeed)?)$/i.test(model);
+      const fixedSampling = (volcArk && /^kimi-/i.test(model)) || (this.cfg.baseUrl.includes("127.0.0.1:3018") && /^(?:gpt-[56]|o\d)/i.test(model)) || moonshot && /^kimi-k(?:3|2\.(?:5|6)|2\.7-code(?:-highspeed)?)$/i.test(model);
       if (!fixedSampling) body.temperature = opts?.temperature ?? this.cfg.temperature;
       // MiniMax's default OpenAI format embeds private thinking in content.
       // Keep thinking enabled, but ask for its dedicated non-display fields.
@@ -274,15 +276,26 @@ export class OpenAICompatibleClient implements LLMClient {
         if (/^kimi-k2\.(?:5|6)$/i.test(model)) body.thinking = { type: "disabled" };
       }
       if (opts?.tools && opts.tools.length > 0) {
-        body.tools = opts.tools;
+        // 2026-11-07 同名工具去重（DeepSeek 遇重名直接 400）
+        { const seen = new Set<string>(); body.tools = opts.tools.filter((t: any) => { const n = t?.function?.name ?? t?.name; if (!n || seen.has(n)) return false; seen.add(n); return true; }); }
         body.tool_choice = "auto";
+        // 2026-11-17 OpenAI 官方：顶层 schema 必须是纯 object（无 oneOf/anyOf/allOf/enum/not），且 tools 上限 128；内置工具优先，MCP 其次
+        if (this.cfg.baseUrl.includes("127.0.0.1:3018") && Array.isArray(body.tools)) {
+          const all = body.tools as any[];
+          const okSchema = (t: any) => { const s = t?.function?.parameters; return !s || (s.type === "object" && !["oneOf","anyOf","allOf","enum","not","const"].some(k => k in s)); };
+          const valid = all.filter(okSchema);
+          const ordered = [...valid.filter(t => !String(t?.function?.name ?? "").startsWith("mcp")), ...valid.filter(t => String(t?.function?.name ?? "").startsWith("mcp"))];
+          if (all.length !== valid.length || ordered.length > 128) log.warn("GPT官方 tools 过滤", { model, total: all.length, badSchema: all.length - valid.length, kept: Math.min(128, ordered.length) });
+          body.tools = ordered.slice(0, 128);
+        }
       } else if (opts?.tools) {
         // Omitting tools does not reliably disable calls inferred from earlier
         // assistant/tool history on compatible providers.
-        body.tool_choice = "none";
+        if (!this.cfg.baseUrl.includes("127.0.0.1:3018")) body.tool_choice = "none"; // OpenAI 官方不接受无 tools 的 tool_choice
       }
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (this.cfg.apiKey) headers.Authorization = `Bearer ${this.cfg.apiKey}`;
+      if (this.cfg.baseUrl.includes("/v1/raw")) headers["X-Client-Id"] = process.argv.some(a => a.includes("discord")) ? "discord" : "qqbot";
       const payload = JSON.stringify(body);
       const receipt = opts?.phoneContextReceipt;
       if (receipt) {

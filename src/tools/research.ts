@@ -22,7 +22,7 @@ export const DEFAULT_RESEARCH_LIMITS: ResearchLimits = {
   maxQueries: 3, maxSearchRequests: 3, maxPages: 6, maxBrowserRenders: 2, maxCloudExtractions: 2,
   maxHttpRequests: 24, maxOutputChars: 48000, totalTimeoutMs: 45000,
 };
-export type ResearchProvider = "searxng" | "tavily" | "exa" | "google_cse" | "firecrawl" | "jina" | "crawl4ai";
+export type ResearchProvider = "searxng" | "tavily" | "exa" | "google_cse" | "you" | "firecrawl" | "jina" | "crawl4ai";
 export type ResearchOperation = "search" | "extract" | "render";
 export interface ProviderQuota { daily: number; monthly: number }
 export const DEFAULT_QUOTAS: Record<string, ProviderQuota> = {

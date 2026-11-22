@@ -18,6 +18,7 @@ type SearchSettings = Omit<AppConfig["tools"]["search"], "provider"> & {
   provider: string;
   searxngUrl?: string;
   exaApiKey?: string;
+  youApiKey?: string;
   fallbackProviders?: string[];
   minResultsBeforeFallback?: number;
   cacheTtlMs?: number;
@@ -59,7 +60,7 @@ export function createSearchProvider(
   const ttlMs = cfg.cacheTtlMs ?? 10 * 60_000;
   // Credentials influence cache isolation through a digest; neither keys nor queries are stored in cache keys.
   const cacheIdentity = hash({ provider: cfg.provider, searxngUrl: cfg.searxngUrl,
-    tavilyApiKey: cfg.tavilyApiKey, exaApiKey: cfg.exaApiKey, googleCse: cfg.googleCse });
+    tavilyApiKey: cfg.tavilyApiKey, exaApiKey: cfg.exaApiKey, youApiKey: cfg.youApiKey, googleCse: cfg.googleCse });
 
   async function request(backend: SearchBackend, query: string, maxResults: number): Promise<SearchResult[]> {
     const key = `${cacheIdentity}:${backend.name}:${maxResults}:${hash(query)}`;

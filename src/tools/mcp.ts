@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import type { McpServerConfig } from "../config.js";
 import type { ToolDef, ToolParamSchema, ToolContext, ToolImage } from "../types.js";
 import { logger } from "../util/logger.js";
+import { noteDialogResult } from "../agent/dialog-confirm.js";
 
 const log = logger("mcp");
 const PROTOCOL_VERSION = "2024-11-05";
@@ -604,6 +605,7 @@ export class McpManager {
                 // A website failure is not a broken MCP connection and must never trigger replay.
                 throw new Error(`cn-scraper 网站工具失败: ${safeMcpError(output.text, s)}`);
               }
+              if (s.name === "phone" && t.name === "dialog") { try { noteDialogResult(ctx, args, output.text); } catch {} }
               if (output.images.length) ctx.onImages?.(output.images);
               return output.text;
             },

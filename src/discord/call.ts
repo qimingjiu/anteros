@@ -262,6 +262,21 @@ export class VoiceCallService {
 
   private async speak(st: CallState, text: string, gen = st.gen): Promise<void> {
     const t0 = Date.now();
+    if (process.env.ELEVENLABS_API_KEY) {
+      const voice = process.env.ELEVENLABS_VOICE_ID || "TzO3xFFBbgloRWfwBLtY";
+      const er = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`, {
+        method: "POST", headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY, "content-type": "application/json", accept: "audio/mpeg" },
+        body: JSON.stringify({ text: text.slice(0, 1200), model_id: process.env.CALL_ELEVENLABS_MODEL || "eleven_flash_v2_5" }),
+        signal: AbortSignal.timeout(30000) }).catch(() => null);
+      if (!er?.ok) { log.warn(`ElevenLabs TTS 失败: ${er?.status}`); return; }
+      const buf = Buffer.from(await er.arrayBuffer());
+      log.info(`通话 TTS(ElevenLabs) ${Date.now() - t0}ms`);
+      if (gen !== st.gen || this.calls.get(st.guildId) !== st || st.capturing) return;
+      st.conn.subscribe(st.player);
+      st.player.play(oggFromBuffer(buf));
+      st.lastActivity = Date.now();
+      return;
+    }
     const r = await fetch(`${this.deps.tts.host.replace(/\/$/, "")}/v1/t2a_v2`, {
       method: "POST", headers: { authorization: `Bearer ${this.deps.tts.apiKey}`, "content-type": "application/json" },
       body: JSON.stringify({ model: this.deps.tts.model, text: text.slice(0, 1200), stream: false, language_boost: "English", output_format: "hex",

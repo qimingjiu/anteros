@@ -91,6 +91,8 @@ export class DiscordProvider implements Provider {
         GatewayIntentBits.GuildVoiceStates,
       ],
       partials: [Partials.Channel, Partials.Message],
+      // undici FormData mismatch on Node 22: send REST through the built-in fetch
+      rest: { makeRequest: fetch as any },
     });
     this.client = client;
     this.state.connection = "connecting";
