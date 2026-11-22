@@ -56,7 +56,7 @@ const isBriefCaption = (text: string): boolean => text.length <= 100 && /^[^\n�
 /** Prioritize the actual question, its quoted image and trusted supplements.
  * Recent images are opt-in: unrelated messages must not re-open old pictures. */
 export function collectImageContext(db: Database, message: MessageRecord, merged: MessageRecord[] = [],
-  options: { resumeRecentImage?: boolean; attachJustSentOwnImage?: boolean; canSee?: (eventKey: string) => boolean } = {}): ContextImage[] {
+  options: { resumeRecentImage?: boolean; attachJustSentOwnImage?: boolean; recentOnReply?: boolean; canSee?: (eventKey: string) => boolean } = {}): ContextImage[] {
   const images: ContextImage[] = [];
   const seen = new Set<string>();
   const triggerAt = Date.parse(message.sentAt);
@@ -162,7 +162,7 @@ export function collectImageContext(db: Database, message: MessageRecord, merged
   }
   const needsRecentImages = images.length === 0
     // 2026-11-09：回复某条（无图或机器人自己的）消息、但问的是“这三张图”时，也去取最近的图。
-    ? (asksAboutImage || asksCapability)
+    ? (options.recentOnReply || !message.replyToMessageId) && (asksAboutImage || asksCapability)
     : asksForComparison || (!message.replyToMessageId && refersToEarlierImage);
   if (Number.isFinite(triggerAt) && needsRecentImages) {
     const records = priorRows(message, currentId, 10 * 60_000).map(row => db.rowToRecord(row));

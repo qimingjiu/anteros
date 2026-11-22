@@ -1100,7 +1100,7 @@ export class Agent {
           const next = this.pendingObservers.get(groupId);
           this.pendingObservers.delete(groupId);
           if (next && !this.db.isUserBlocked(next.accountId, next.senderId)
-            && (this.isToolOwner(next.senderId) || this.replyLimits.canStart(this.limitRequest(next, true)).allowed)) void this.enqueueGroupReply(next, groupId, undefined, true);
+            && ((this.cfg.groups.ownerBypassLimits && this.isToolOwner(next.senderId)) || this.replyLimits.canStart(this.limitRequest(next, true)).allowed)) void this.enqueueGroupReply(next, groupId, undefined, true);
         }
       });
     }
@@ -1135,7 +1135,7 @@ export class Agent {
       if (signal?.aborted || this.db.isUserBlocked(m.accountId, m.senderId)) return;
       this.warmReplyLimits(m);
       // 主人发言不受环境插话冷却/窗口配额限制（2026-11-15 她嫌雾岛纪不理她）。
-      if (m.groupId && !this.isToolOwner(m.senderId)) {
+      if (m.groupId && !(this.cfg.groups.ownerBypassLimits && this.isToolOwner(m.senderId))) {
         const decision = this.replyLimits.canStart(request);
         if (!decision.allowed) { log.info("自动接话跳过", {conversationId:m.conversationId,messageId:m.messageId,reason:decision.reason}); return; }
       }
@@ -1283,7 +1283,8 @@ export class Agent {
       .join("\n");
 
     let images = collectImageContext(this.db, m, trustedMerged,
-      { resumeRecentImage: this.resumesRecentImage(m, observe), attachJustSentOwnImage: !observe, canSee: visible });
+      { resumeRecentImage: this.resumesRecentImage(m, observe), attachJustSentOwnImage: !observe, canSee: visible,
+        recentOnReply: this.cfg.groups.recentImageOnReply === true });
     if (m.providerId === "telegram" && images.length) images = await resolveProviderImageContext(this.gateway.getProvider(), images);
     const imageContextId = randomUUID();
     const sourceCounts = { current: 0, replied: 0, merged: 0, recent: 0 };

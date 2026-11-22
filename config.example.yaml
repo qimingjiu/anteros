@@ -73,6 +73,9 @@ groups:
   link_preview: false # 链接是否读取、如何回应由主模型决定
   link_preview_cooldown_minutes: 120 # 同一链接同群的冷却时间
   max_reply_chars: 1200 # 单条回复上限，超长自动分段
+  long_image_chars: 0 # 回复达到这么多字就渲染成长图发出；0 关闭
+  owner_bypass_limits: false # 主人发言不受环境插话冷却和窗口配额限制
+  recent_image_on_reply: false # 回复无图消息却问“这张图”时，也去取最近的图
   conversation:
     enabled: true # 同一主模型决定回复、静默及当前攻击者拉黑
     owner_aliases: [] # 主人完整名字/昵称；别人 @主人或提及主人可自动插话，仍受环境冷却/配额

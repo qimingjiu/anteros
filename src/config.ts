@@ -124,6 +124,10 @@ export interface AppConfig {
     linkPreviewCooldownMinutes: number;
     maxReplyChars: number;
     longImageChars: number;
+    /** 主人发言不受环境插话冷却/窗口配额限制（生产 2026-11-15 开）。 */
+    ownerBypassLimits?: boolean;
+    /** 回复某条无图消息但问的是“这几张图”时，也取最近的图（生产 2026-11-09 开）。 */
+    recentImageOnReply?: boolean;
     autoReply?: GroupReplyJudgeConfig;
     conversation?: { enabled: boolean; ownerAliases: string[]; wakeAliases?: string[]; ownerWakeAliases?: OwnerWakeAliases[];
       observerCooldownMs?: number; observerWindowMs?: number;
@@ -820,6 +824,8 @@ export function loadConfig(configPath: string): AppConfig {
       linkPreviewCooldownMinutes: num(groups, "link_preview_cooldown_minutes", 120),
       maxReplyChars: num(groups, "max_reply_chars", 1200),
       longImageChars: num(groups, "long_image_chars", 0),
+      ownerBypassLimits: bool(groups, "owner_bypass_limits", false),
+      recentImageOnReply: bool(groups, "recent_image_on_reply", false),
       conversation: { enabled: bool(conversation, "enabled", true), ownerAliases: strList(conversation, "owner_aliases"),
         wakeAliases: wakeAliasList(pick(conversation, "wake_aliases"), "groups.conversation.wake_aliases"),
         ownerWakeAliases: ownerWakeAliasList(pick(conversation, "owner_wake_aliases")),
