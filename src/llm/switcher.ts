@@ -8,6 +8,18 @@ import { MemberRouteError, checkMemberResult, memberRouteCompatible, memberRoute
   type MemberModelFailoverPolicy } from "./member-routing.js";
 
 export type { MemberModelFailoverPolicy } from "./member-routing.js";
+import { readFileSync } from "node:fs";
+
+/** 网关路由：默认 base_url 指向 Labrys /v1/raw 时，切换的模型也走网关（按上游模型名找路由 id）。找不到路由才直连。 */
+function labrysRoute(model: string, service: string, profileName = ""): string | undefined {
+  try {
+    const cfg = JSON.parse(readFileSync(process.env.LABRYS_MODELS_PATH || "/opt/labrys/models.local.json", "utf8"));
+    const hits = (cfg.routes ?? []).filter((r: any) => r.model === model);
+    const svc = service.toLowerCase();
+    const byName = profileName ? hits.find((r: any) => String(r.name) === profileName.replace("/", " ")) : undefined; // 2026-11-10 同模型多服务商（天翼云1/2）按档位名区分
+    return (byName ?? hits.find((r: any) => String(r.providerId).toLowerCase() === svc) ?? hits[0])?.id;
+  } catch { return undefined; }
+}
 
 const log = logger("llm-switch");
 const KV_KEY = "active_model_profile";
@@ -98,11 +110,14 @@ export class ModelSwitcher implements LLMClient {
   }
 
   private createProfileClient(p: ModelProfile): LLMClient {
+    const viaGateway = this.defaultCfg.baseUrl.includes("/v1/raw") && p.provider !== "mock";
+    const route = viaGateway && !/127\.0\.0\.1:3018|volces\.com/.test(p.baseUrl) ? labrysRoute(p.model, serviceName(p), p.name) : undefined; // 2026-11-17 GPT官方/火山直连
+    if (viaGateway) log.info(route ? `模型经网关: ${p.name} → route ${route}` : `网关无此模型路由，直连: ${p.name}`);
     return createLLMClient({
       provider: p.provider,
-      baseUrl: p.baseUrl,
-      apiKey: p.apiKey,
-      model: p.model,
+      baseUrl: route ? this.defaultCfg.baseUrl : p.baseUrl,
+      apiKey: route ? this.defaultCfg.apiKey : p.apiKey,
+      model: route ?? p.model,
       fallbackModel: "",
       summaryModel: "",
       temperature: p.temperature ?? this.defaultCfg.temperature,

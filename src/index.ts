@@ -3,6 +3,7 @@ import process from "node:process";
 import { loadConfig, resolveDataPath, type AppConfig } from "./config.js";
 import { Database } from "./db/index.js";
 import { RecallTools } from "./tools/recall.js";
+import { GroupLinkTools } from "./tools/group-links.js";
 import { DiscordProvider } from "./discord/provider.js";
 import { MusicService } from "./discord/music.js";
 import { VoiceCallService } from "./discord/call.js";
@@ -14,6 +15,7 @@ import { ModelSelection } from "./llm/selection.js";
 import type { PersonaCard } from "./agent/persona-switch.js";
 import { discoverModelProfiles } from "./llm/catalog.js";
 import { SqliteMemory } from "./memory/index.js";
+import { JituiMemory } from "./memory/jitui.js";
 import { MessageRetention } from "./memory/retention.js";
 import { Agent } from "./agent/index.js";
 import { createSearchProvider } from "./tools/search.js";
@@ -38,6 +40,7 @@ import { IncomingDocumentService } from "./documents/incoming.js";
 import { TaskLedger } from "./tasks/index.js";
 import { MiniMaxMediaService } from "./tools/minimax-media.js";
 import { SendImageService } from "./tools/send-image.js";
+import { LabrysForwardService } from "./tools/labrys-forward.js";
 import { MuninnMemoryService } from "./tools/muninn-memory.js";
 import { FeishuToolsService } from "./tools/feishu-tools.js";
 import { EmailService, emailConfigFromEnv } from "./tools/email.js";
@@ -324,6 +327,11 @@ async function main(): Promise<void> {
       crossPlatform,
       familyRoomFor: source => rooms?.roomFor(source),
     }) : null;
+    const labrysForward = cfg.tools.enabled && process.env.LABRYS_FORWARD !== "off" ? new LabrysForwardService({
+      db,accountId:cfg.gateway.accountId,ownerIds:(cfg.tools.ownerIds ?? cfg.admins).map(String),incoming:incomingDocuments,
+      mediaDir:path.join(resolveDataPath(baseDir,cfg.documents?.outputDir ?? "data/documents"),"media"),
+      documentsDir:resolveDataPath(baseDir,cfg.documents?.outputDir ?? "data/documents"),
+    }) : null;
     const muninnMemory = cfg.tools.enabled && cfg.tools.muninn?.enabled ? new MuninnMemoryService({
       mcp,accountId:cfg.gateway.accountId,ownerIds:cfg.tools.ownerIds ?? cfg.admins,
     }) : null;
@@ -377,11 +385,16 @@ async function main(): Promise<void> {
       incomingDocuments,
       minimaxMedia,
       sendImage,
+      labrysForward,
       muninnMemory,
       feishuTools,
       email,
-      recall: new RecallTools({ provider, db, ownerIds: (cfg.tools.ownerIds ?? cfg.admins).map(String),
-        canSee: rooms ? canSeeRoomEvent : undefined }),
+      jitui: cfg.tools.enabled ? JituiMemory.fromEnv({ ownerIds: (cfg.tools.ownerIds ?? cfg.admins).map(String), allowlist: cfg.groups.allowlist,
+        ownerOnlyGroups: cfg.groups.ownerOnlySearch ?? [], provider: cfg.gateway.provider }) : null,
+      recall: ((r, g) => ({ toolsFor: (m: MessageRecord) => [...r.toolsFor(m), ...g.toolsFor(m)] }))(
+        new RecallTools({ provider, db, ownerIds: (cfg.tools.ownerIds ?? cfg.admins).map(String),
+          canSee: rooms ? canSeeRoomEvent : undefined }),
+        new GroupLinkTools({ db, ownerIds: (cfg.tools.ownerIds ?? cfg.admins).map(String) })),
       music: music ? { toolsFor: (m: any) => [...music.toolsFor(m), ...(voiceCall?.toolsFor(m) ?? [])] } : null,
       crossPlatform,
       familyDesk,

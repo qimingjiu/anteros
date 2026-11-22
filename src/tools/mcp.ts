@@ -5,6 +5,7 @@ import type { ToolDef, ToolParamSchema, ToolContext, ToolImage } from "../types.
 import { logger } from "../util/logger.js";
 import { openManagedMcpResponse } from "../mcp-admin/remote.js";
 import { readBounded } from "./web-http.js";
+import { noteDialogResult } from "../agent/dialog-confirm.js";
 
 const log = logger("mcp");
 const PROTOCOL_VERSION = "2024-11-05";
@@ -699,6 +700,7 @@ export class McpManager {
           if (server.name === "cn-scraper" && cnScraperFailure(output.text)) throw new Error(`cn-scraper 网站工具失败: ${safeMcpError(output.text, server)}`);
           // Revocation may occur while a network request is in flight.
           if (scope && (this.connections.get(server.name) !== connection || !scope(context))) throw new Error("该工具当前不可用");
+          if (server.name === "phone" && tool.name === "dialog") { try { noteDialogResult(context, args, output.text); } catch {} }
           if (output.images.length) context.onImages?.(output.images);
           return scope ? redactMcpCredentials(output.text, server) : output.text;
         },

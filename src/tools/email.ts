@@ -4,6 +4,7 @@ import type SMTPTransport from "nodemailer/lib/smtp-transport/index.js";
 import { load } from "cheerio";
 import { stableHash } from "../util/misc.js";
 import type { MessageRecord, ToolContext, ToolDef } from "../types.js";
+import { takeDialogYes } from "../agent/dialog-confirm.js";
 
 export interface EmailConfig {
   smtp: { host: string; port: number; user: string; pass: string };
@@ -209,7 +210,7 @@ export class EmailService {
         const allowed: Record<Action, string[]> = { status: ["action"], list: ["action", "limit", "offset"], search: ["action", "limit", "query"], read: ["action", "uid", "uidValidity"], send: ["action", "to", "subject", "text"] };
         if (!Object.hasOwn(allowed, action) || Reflect.ownKeys(args).some(k => typeof k !== "string" || !allowed[action].includes(k))) return fail("invalid_input");
         if (!this.config) return fail("not_configured");
-        if (action === "send") return this.send(args, message, originalText);
+        if (action === "send") return this.send(args, message, originalText, takeDialogYes(ctx));
         if ((action === "list" || action === "search") && (args.limit !== undefined && (!Number.isSafeInteger(args.limit) || Number(args.limit) < 1 || Number(args.limit) > 10)
           || args.offset !== undefined && (!Number.isSafeInteger(args.offset) || Number(args.offset) < 0 || Number(args.offset) > 1000))) return fail("invalid_input");
         if (action === "search" && (typeof args.query !== "string" || !args.query.trim() || args.query.length > 200 || /[\u0000-\u001f\u007f]/u.test(args.query))) return fail("invalid_input");
@@ -272,8 +273,9 @@ export class EmailService {
     const truncated = text.length > 6000 || (typeof part.size === "number" && part.size > MAX_BYTES) || bytes >= MAX_BYTES;
     return bounded({ ...metadata(msg), mailbox: "INBOX", uidValidity, text: safeText(text, 6000), attachments, truncated });
   }
-  private async send(args: Record<string, unknown>, message: MessageRecord, body: string): Promise<string> {
-    const confirmed = !explicitSend(body) && shortConfirm(body);
+  private async send(args: Record<string, unknown>, message: MessageRecord, body: string, dialog?: { hint: string }): Promise<string> {
+    // A "是" tapped on her phone dialog (phone/dialog confirm, same conversation, <3 min) counts like a typed 去发.
+    const confirmed = !!dialog || (!explicitSend(body) && shortConfirm(body));
     if (!explicitSend(body) && !confirmed) return fail("explicit_instruction_required");
     const to = args.to === undefined ? address(this.config!.defaultTo) : address(args.to);
     if (!to) return fail("recipient_not_authorized");
@@ -281,7 +283,7 @@ export class EmailService {
       // The owner may confirm briefly ("去发") a recipient that she or the bot named in the last few messages of this conversation.
       let recent: string[] = [];
       try { recent = this.deps.recentTexts?.(message.conversationId, this.deps.ownerIds, 12, message) ?? []; } catch { recent = []; }
-      if (!recent.some(text => addressesIn(text).includes(to))) return fail("recipient_not_authorized");
+      if (!recent.some(text => addressesIn(text).includes(to)) && !(dialog && addressesIn(dialog.hint).includes(to))) return fail("recipient_not_authorized");
     }
     if (typeof args.subject !== "string" || !args.subject.trim() || args.subject.length > 200 || /[\r\n\u0000-\u001f\u007f]/u.test(args.subject)
       || typeof args.text !== "string" || !args.text.trim() || args.text.length > 10_000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(args.text)) return fail("invalid_input");

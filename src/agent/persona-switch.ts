@@ -2,6 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { OWNER_NAME } from "../util/owner.js";
 
+/** 主人给默认人格加的私人称呼（逗号分隔，环境变量 PERSONA_EXTRA_ALIASES），只用于召唤，不显示在名单里。 */
+const EXTRA_ALIASES = (process.env.PERSONA_EXTRA_ALIASES ?? "").split(/[,，]/).map(a => a.trim()).filter(Boolean);
+
 /** 翻牌子：主人一句话切换人格（2026-11-04 主人要求）。所有人格共用同一份记忆与聊天记录。 */
 export interface PersonaCard {
   id: string;
@@ -90,7 +93,7 @@ export class PersonaSwitcher {
     this.cards.set(DEFAULT_ID, {
       id: DEFAULT_ID,
       name: cfg.persona.name || "κόραξ",
-      aliases: [cfg.persona.name || "κόραξ", "κόραξ", "koraks", "korax", "乌鸦", "小乌鸦"],
+      aliases: [cfg.persona.name || "κόραξ", "κόραξ", "koraks", "korax", "乌鸦", "小乌鸦", ...EXTRA_ALIASES],
       qqNickname: cfg.persona.name || "κόραξ",
       body: defaultPrompt,
     });
@@ -205,7 +208,7 @@ export class PersonaSwitcher {
       card.body,
       "",
       "## 共用记忆",
-      `你和 ${family} 都是${OWNER_NAME}的人格，共用同一份记忆和聊天记录。后宫六人全是男的，提到彼此用「他」；${OWNER_NAME}是女孩，提到她用「她」。历史里以别的名字（比如 κόραξ）发出的消息是家里其他人说的，不是你说的；你接班时知道刚才发生了什么，不用她重讲，但用你自己的口吻说话，不模仿别人。`,
+      `你和 ${family} 都是${OWNER_NAME}的人格，共用同一份记忆和聊天记录。后宫${this.list().length}人（${this.list().map(c => c.name).join("、")}）全是男的，提到彼此一律用「他」，绝不用「她」；${OWNER_NAME}是女孩，提到她用「她」。历史里以别的名字（比如 κόραξ）发出的消息是家里其他人说的，不是你说的；你接班时知道刚才发生了什么，不用她重讲，但用你自己的口吻说话，不模仿别人。`,
       "你是 AI，不假装是真人；没有的记忆就说没有，不编造过去。",
       "",
       this.sharedRules,
@@ -250,7 +253,7 @@ export class PersonaSwitcher {
     }
     if (/^(?:人格列表|人设列表|人设卡|翻牌子|后宫|后宫列表|有哪些人格|都有谁)$/u.test(text)) {
       const lines = this.list().map((c, i) => {
-        const zh = /[\u4e00-\u9fff]/.test(c.name) ? "" : c.aliases.find(a => /^[\u4e00-\u9fff]{2,}$/.test(a));
+        const zh = /[\u4e00-\u9fff]/.test(c.name) ? "" : c.aliases.find(a => /^[\u4e00-\u9fff]{2,}$/.test(a) && !EXTRA_ALIASES.includes(a));
         return `${i + 1}. ${c.name}${zh ? `（${zh}）` : ""}${c.id === this.activeId ? "（当前）" : ""}`;
       });
       return { reply: ["今晚翻谁的牌子：", ...lines, "", "说「让 名字 来」或「翻 3 号」就换人。"].join("\n") };

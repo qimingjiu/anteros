@@ -161,7 +161,8 @@ export function collectImageContext(db: Database, message: MessageRecord, merged
     }
   }
   const needsRecentImages = images.length === 0
-    ? !message.replyToMessageId && (asksAboutImage || asksCapability)
+    // 2026-11-09：回复某条（无图或机器人自己的）消息、但问的是“这三张图”时，也去取最近的图。
+    ? (asksAboutImage || asksCapability)
     : asksForComparison || (!message.replyToMessageId && refersToEarlierImage);
   if (Number.isFinite(triggerAt) && needsRecentImages) {
     const records = priorRows(message, currentId, 10 * 60_000).map(row => db.rowToRecord(row));

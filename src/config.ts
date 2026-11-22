@@ -123,6 +123,7 @@ export interface AppConfig {
     linkPreview: boolean;
     linkPreviewCooldownMinutes: number;
     maxReplyChars: number;
+    longImageChars: number;
     autoReply?: GroupReplyJudgeConfig;
     conversation?: { enabled: boolean; ownerAliases: string[]; wakeAliases?: string[]; ownerWakeAliases?: OwnerWakeAliases[];
       observerCooldownMs?: number; observerWindowMs?: number;
@@ -166,9 +167,10 @@ export interface AppConfig {
   tools: {
     enabled: boolean;
     search: {
-      provider: "none" | "tavily" | "google_cse" | "searxng" | "exa";
+      provider: "none" | "tavily" | "google_cse" | "searxng" | "exa" | "you";
       tavilyApiKey: string;
       exaApiKey?: string;
+      youApiKey?: string;
       searxngUrl?: string;
       fallbackProviders?: string[];
       minResultsBeforeFallback?: number;
@@ -214,7 +216,7 @@ export interface AppConfig {
   documents?: DocumentConfig;
   presence?: PhonePresenceConfig;
   notion?: NotionConfig;
-  features?: { tasks: boolean; personalMemory: boolean; groupSearch: boolean; linkDedup: boolean; incomingFiles: boolean };
+  features?: { tasks: boolean; personalMemory: boolean; groupSearch: boolean; linkDedup: boolean; incomingFiles: boolean; inviteCodes?: boolean; invitePool?: string };
 }
 
 export interface NotionConfig {
@@ -690,7 +692,7 @@ export function loadConfig(configPath: string): AppConfig {
   }
 
   const searchProvider = optString(search, "provider", "none");
-  if (!["none", "tavily", "google_cse", "searxng", "exa"].includes(searchProvider)) {
+  if (!["none", "tavily", "google_cse", "searxng", "exa", "you"].includes(searchProvider)) {
     throw new Error(`配置错误: tools.search.provider 不支持 ${searchProvider}`);
   }
   function webNumber(object: Record<string, unknown>, key: string, fallback: number, minimum: number, maximum: number, context: string, integer = true): number {
@@ -711,19 +713,19 @@ export function loadConfig(configPath: string): AppConfig {
     } catch { throw new Error(`配置错误: ${context}.${key} 必须是仅监听本机的服务根地址`); }
   }
   const fallbackProviders = strList(search, "fallback_providers");
-  if (fallbackProviders.some(value => !["searxng", "tavily", "exa", "google_cse"].includes(value))) throw new Error("配置错误: tools.search.fallback_providers 含不支持的后端");
+  if (fallbackProviders.some(value => !["searxng", "tavily", "exa", "google_cse", "you"].includes(value))) throw new Error("配置错误: tools.search.fallback_providers 含不支持的后端");
   if (research.free_only !== undefined && research.free_only !== true) throw new Error("配置错误: tools.research.free_only 必须保持 true");
   const budget = (research.budget ?? {}) as Record<string, unknown>;
   const quotaSettings = (research.quotas ?? {}) as Record<string, unknown>;
   const webLimits: ResearchLimits = {
-    maxQueries: webNumber(budget, "max_queries", 3, 1, 10, "tools.research.budget"),
-    maxSearchRequests: webNumber(budget, "max_search_requests", 3, 1, 12, "tools.research.budget"),
-    maxPages: webNumber(budget, "max_pages", 6, 1, 20, "tools.research.budget"),
+    maxQueries: webNumber(budget, "max_queries", 3, 1, 20, "tools.research.budget"),
+    maxSearchRequests: webNumber(budget, "max_search_requests", 3, 1, 40, "tools.research.budget"),
+    maxPages: webNumber(budget, "max_pages", 6, 1, 30, "tools.research.budget"),
     maxBrowserRenders: webNumber(budget, "max_browser_renders", 2, 0, 4, "tools.research.budget"),
     maxCloudExtractions: webNumber(budget, "max_cloud_extractions", 2, 0, 4, "tools.research.budget"),
     maxHttpRequests: webNumber(budget, "max_http_requests", 24, 1, 60, "tools.research.budget"),
     maxOutputChars: webNumber(budget, "max_output_chars", 48000, 1000, 120000, "tools.research.budget"),
-    totalTimeoutMs: webNumber(budget, "total_timeout_ms", 45000, 5000, 90000, "tools.research.budget"),
+    totalTimeoutMs: webNumber(budget, "total_timeout_ms", 45000, 5000, 180000, "tools.research.budget"),
   };
   const webQuotas: Record<string, ProviderQuota> = {};
   for (const [provider, daily, monthly, maximum] of [["tavily", 20, 600, 1000], ["firecrawl", 30, 800, 1000], ["exa", 0.15, 4, 10], ["google_cse", 30, 500, 1000]] as const) {
@@ -817,6 +819,7 @@ export function loadConfig(configPath: string): AppConfig {
       linkPreview: bool(groups, "link_preview", true),
       linkPreviewCooldownMinutes: num(groups, "link_preview_cooldown_minutes", 120),
       maxReplyChars: num(groups, "max_reply_chars", 1200),
+      longImageChars: num(groups, "long_image_chars", 0),
       conversation: { enabled: bool(conversation, "enabled", true), ownerAliases: strList(conversation, "owner_aliases"),
         wakeAliases: wakeAliasList(pick(conversation, "wake_aliases"), "groups.conversation.wake_aliases"),
         ownerWakeAliases: ownerWakeAliasList(pick(conversation, "owner_wake_aliases")),
@@ -876,6 +879,7 @@ export function loadConfig(configPath: string): AppConfig {
         provider: searchProvider as AppConfig["tools"]["search"]["provider"],
         tavilyApiKey: optString(search, "tavily_api_key") || envValue(optString(search, "tavily_api_key_env") || undefined),
         exaApiKey: optString(search, "exa_api_key") || envValue(optString(search, "exa_api_key_env") || undefined),
+        youApiKey: optString(search, "you_api_key") || envValue(optString(search, "you_api_key_env") || undefined),
         searxngUrl: localWebService(search, "searxng_url", "tools.search"),
         fallbackProviders,
         minResultsBeforeFallback: webNumber(search, "min_results_before_fallback", 2, 0, 10, "tools.search"),
@@ -972,6 +976,8 @@ export function loadConfig(configPath: string): AppConfig {
       groupSearch: bool(features, "group_search", true),
       linkDedup: bool(features, "link_dedup", true),
       incomingFiles: bool(features, "incoming_files", true),
+      inviteCodes: bool(features, "invite_codes", false),
+      invitePool: optString(features, "invite_pool", "data/jq_invites.json"),
     },
     notion: {
       enabled: bool(notion, "enabled", false),

@@ -371,6 +371,23 @@ export class IncomingDocumentService {
       (SELECT id FROM incoming_documents WHERE account_id=?)`).run(accountId, accountId);
     this.options.db.exec("DELETE FROM incoming_document_room_grants WHERE NOT EXISTS (SELECT 1 FROM incoming_documents WHERE id=file_id)");
   }
+  /** 2026-11-05 转发到微信/TG：取主人在当前会话发的文件原始字节（按文件名，或当前/引用消息，或两分钟内刚发的）。 */
+  async bytesFor(message: MessageRecord, name: string): Promise<{ name: string; bytes: Uint8Array }> {
+    if (!this.permitted({ accountId: message.accountId, conversationId: message.conversationId, requesterId: message.senderId })) throw new IncomingFileError("resolve", "protocol_unavailable", "只有主人可以转发文件");
+    const wanted = name.trim();
+    let rows = wanted ? this.namedFiles(message, wanted, this.room(message)) : this.relevant(message, this.room(message));
+    if (!rows.length && !wanted) rows = this.recentOwn(message, this.room(message));
+    const row = rows[0];
+    if (!row) throw new IncomingFileError("resolve", "protocol_unavailable", wanted ? `当前会话里找不到文件「${wanted}」` : "当前消息和引用消息里没有文件");
+    const groupId = row.conversation_id.startsWith("group_") ? row.conversation_id.slice(6) : undefined;
+    if (!this.options.provider.resolveIncomingFile) throw new IncomingFileError("resolve", "protocol_unavailable", "未配置接收文件下载地址解析");
+    const resolved = await this.options.provider.resolveIncomingFile({ fileId: row.protocol_id, groupId,
+      userId: groupId ? undefined : row.conversation_id.slice(8), busId: row.bus_id ?? undefined });
+    if (!resolved.ok) throw new IncomingFileError("resolve", "protocol_unavailable", "协议端未返回可用的文件下载地址；可能已过期");
+    validateIncomingDownloadUrl(resolved.url, { providerResolved: true });
+    const bytes = await (this.options.download ?? downloadIncomingFile)(resolved.url, { maxBytes: 25 * 1024 * 1024, timeoutMs: 60_000, providerResolved: true });
+    return { name: row.name, bytes };
+  }
   private roomRows(scope: Pick<IncomingReadScope, "accountId" | "conversationId">, room: IncomingRoomVisibility,
     selection: RoomFileSelection = {}): FileRow[] {
     const where = ["d.account_id=?", "d.conversation_id=?", "(m.room_id=? OR m.room_id IS NULL)"];
