@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { parseCrossPlatformConfig, type CrossPlatformConfig } from "./cross-platform/index.js";
 import { validateHeaderName, validateHeaderValue } from "node:http";
 import path from "node:path";
 import YAML from "yaml";
@@ -62,14 +63,29 @@ export interface OwnerWakeAliases {
   aliases: string[];
 }
 
+export type ChatPlatform = "onebot" | "discord" | "telegram";
+
+export interface AdditionalAccount {
+  provider: ChatPlatform;
+  accountId: string;
+  ownerId: string;
+  groups: string[];
+  mentionOnly: string[];
+  token: string;
+  tokenEnv: string;
+  endpoint?: string;
+}
+
 export interface AppConfig {
   timezone: string;
   persona: { name: string; prompt: string; file: string };
   database: { path: string };
   gateway: {
-    provider: "onebot" | "discord";
+    provider: ChatPlatform;
     accountId: string;
     discord?: { tokenEnv: string; token: string };
+    telegram?: { tokenEnv: string; token: string };
+    additionalAccounts?: AdditionalAccount[];
     onebot: {
       endpoint: string;
       tokenEnv: string;
@@ -85,6 +101,8 @@ export interface AppConfig {
       backfillPageLimit: number;
     };
   };
+  family?: { ownerId: string };
+  crossPlatform?: CrossPlatformConfig;
   groups: {
     allowlist: string[];
     /** Groups where the bot speaks only when @-mentioned (no names, wake words, observer, poke, link notices). */
@@ -165,6 +183,7 @@ export interface AppConfig {
     email?: { enabled: boolean };
     mcp: {
       enabled: boolean;
+      managedEnabled?: boolean;
       connectTimeoutMs: number;
       callTimeoutMs: number;
       servers: McpServerConfig[];
@@ -293,6 +312,49 @@ function strList(raw: Record<string, unknown>, key: string): string[] {
   const v = pick(raw, key);
   if (!Array.isArray(v)) return [];
   return v.map(String).filter((s) => s.length > 0);
+}
+
+function additionalAccounts(raw: unknown, primaryId: string, primary: ChatPlatform): AdditionalAccount[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.length > 2) throw new Error("配置错误: gateway.additional_accounts 最多允许两个不同平台");
+  const accounts: AdditionalAccount[] = [];
+  const ids = new Set([primaryId]);
+  const providers = new Set<ChatPlatform>([primary]);
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error("配置错误: gateway.additional_accounts 每项必须是对象");
+    }
+    const account = entry as Record<string, unknown>;
+    const context = "gateway.additional_accounts[].";
+    const provider = reqString(account, "provider", context);
+    if (provider !== "onebot" && provider !== "discord" && provider !== "telegram") {
+      throw new Error("配置错误: additional_accounts.provider 必须是 onebot、discord 或 telegram");
+    }
+    const accountId = reqString(account, "account_id", context);
+    if (!/^[a-z0-9_-]{1,64}$/iu.test(accountId) || ids.has(accountId) || providers.has(provider)) {
+      throw new Error("配置错误: 每个平台和 account_id 只能登记一次，account_id 使用字母、数字、下划线或连字符");
+    }
+    const ownerId = reqString(account, "owner_id", context);
+    if (!/^[1-9]\d{0,19}$/u.test(ownerId)) throw new Error("配置错误: additional_accounts.owner_id 必须是带引号的真实用户 ID");
+    const groupFormat = provider === "telegram" ? /^-[1-9]\d{0,19}(?::[1-9]\d{0,9})?$/u : /^[1-9]\d{0,19}$/u;
+    const configuredGroups = (key: string): string[] => {
+      const values = account[key] ?? [];
+      if (!Array.isArray(values) || values.some(value => typeof value !== "string" || !groupFormat.test(value))) {
+        throw new Error(`配置错误: ${context}${key} 必须是带引号的群或频道 ID 列表`);
+      }
+      return [...new Set(values as string[])];
+    };
+    const groups = configuredGroups("groups");
+    const mentionOnly = account.mention_only === undefined ? groups : configuredGroups("mention_only");
+    if (mentionOnly.some(id => !groups.includes(id))) throw new Error("配置错误: additional_accounts.mention_only 必须来自 groups");
+    const tokenEnv = optString(account, "token_env", provider === "discord" ? "DISCORD_BOT_TOKEN"
+      : provider === "telegram" ? "TELEGRAM_BOT_TOKEN" : "");
+    const endpoint = provider === "onebot" ? reqString(account, "endpoint", context) : undefined;
+    ids.add(accountId);
+    providers.add(provider);
+    accounts.push({ provider, accountId, ownerId, groups, mentionOnly, tokenEnv, token: envValue(tokenEnv), endpoint });
+  }
+  return accounts;
 }
 
 /** Resolve private HTTP credentials without retaining environment names or exposing values in errors. */
@@ -460,8 +522,11 @@ export function loadConfig(configPath: string): AppConfig {
   };
 
   const provider = optString(gw, "provider", "onebot");
-  if (provider !== "onebot" && provider !== "discord") throw new Error(`配置错误: gateway.provider 只支持 onebot 或 discord（收到 ${provider}）`);
+  if (provider !== "onebot" && provider !== "discord" && provider !== "telegram") {
+    throw new Error("配置错误: gateway.provider 只支持 onebot、discord 或 telegram");
+  }
   const dc = (pick(gw, "discord") ?? {}) as Record<string, unknown>;
+  const telegram = (pick(gw, "telegram") ?? {}) as Record<string, unknown>;
   const modelProvider = optString(model, "provider", "openai_compatible");
   if (modelProvider !== "openai_compatible" && modelProvider !== "mock") {
     throw new Error(`配置错误: model.provider 只支持 openai_compatible 或 mock（收到 ${modelProvider}）`);
@@ -663,14 +728,19 @@ export function loadConfig(configPath: string): AppConfig {
     persona: { name: optString(persona, "name", ""), prompt: personaPrompt, file: personaFile },
     database: { path: optString(database, "path", "data/bot.db") },
     gateway: {
-      provider: provider as "onebot" | "discord",
+      provider,
       accountId: optString(gw, "account_id", "default"),
       discord: provider === "discord" ? {
         tokenEnv: optString(dc, "token_env", "DISCORD_BOT_TOKEN"),
         token: envValue(optString(dc, "token_env", "DISCORD_BOT_TOKEN")),
       } : undefined,
+      telegram: provider === "telegram" ? {
+        tokenEnv: optString(telegram, "token_env", "TELEGRAM_BOT_TOKEN"),
+        token: envValue(optString(telegram, "token_env", "TELEGRAM_BOT_TOKEN")),
+      } : undefined,
+      additionalAccounts: additionalAccounts(gw.additional_accounts, optString(gw, "account_id", "default"), provider),
       onebot: {
-        endpoint: provider === "discord" ? optString(ob, "endpoint", "ws://127.0.0.1:1/") : reqString(ob, "endpoint", "gateway.onebot."),
+        endpoint: provider === "onebot" ? reqString(ob, "endpoint", "gateway.onebot.") : optString(ob, "endpoint", "ws://127.0.0.1:1/"),
         tokenEnv: optString(ob, "token_env", ""),
         accessToken: optString(ob, "access_token") || envValue(optString(ob, "token_env") || undefined),
         reconnectBaseMs: num(ob, "reconnect_base_ms", 1000),
@@ -784,6 +854,7 @@ export function loadConfig(configPath: string): AppConfig {
       email: { enabled: bool(email, "enabled", false) },
       mcp: {
         enabled: bool(mcp, "enabled", false),
+        ...(bool(mcp, "managed_enabled", false) ? { managedEnabled: true } : {}),
         connectTimeoutMs: num(mcp, "connect_timeout_ms", 15_000),
         callTimeoutMs: num(mcp, "call_timeout_ms", 120_000),
         servers: mcpServers,
@@ -794,7 +865,7 @@ export function loadConfig(configPath: string): AppConfig {
       enabled: bool(web, "enabled", true),
       host: optString(web, "host", "127.0.0.1"),
       port: num(web, "port", 8642),
-      token: optString(web, "token", ""),
+      token: envValue(optString(web, "token_env")) || optString(web, "token", ""),
     },
     admins: strList(raw, "admins"),
     logging: {
@@ -952,6 +1023,20 @@ export function loadConfig(configPath: string): AppConfig {
       throw new Error(`配置错误: reports.schedule 无效 — ${(e as Error).message}`);
     }
   }
+  if (raw.family !== undefined) {
+    if (!raw.family || typeof raw.family !== "object" || Array.isArray(raw.family)) {
+      throw new Error("配置错误: family 必须是配置对象");
+    }
+    const family = raw.family as Record<string, unknown>;
+    if (bool(family, "enabled", true)) {
+      const ownerId = reqString(family, "owner_id", "family.");
+      if (!/^[1-9]\d{0,19}$/u.test(ownerId) || !(cfg.tools.ownerIds ?? cfg.admins).includes(ownerId)) {
+        throw new Error("配置错误: family.owner_id 必须是主账号 tools.owner_ids 中的真实用户 ID");
+      }
+      cfg.family = { ownerId };
+    }
+  }
+  if (raw.cross_platform !== undefined) cfg.crossPlatform = parseCrossPlatformConfig(raw.cross_platform);
   return cfg;
 }
 

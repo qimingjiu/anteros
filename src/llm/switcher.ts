@@ -34,16 +34,23 @@ export class ModelSwitcher implements LLMClient {
     private profiles: ModelProfile[],
     private defaultCfg: import("../config.js").AppConfig["model"],
     private db: Database,
+    private scope?: { key: string; name: string; fallback: ModelSwitcher },
   ) {
-    const saved = db.kvGet(KV_KEY);
+    const saved = db.kvGet(scope?.key ?? KV_KEY);
     const savedProfile = profiles.find((p) => p.name === saved);
     if (savedProfile && (savedProfile.provider === "mock" || savedProfile.apiKey)) {
       this.apply(savedProfile.name);
     } else {
       if (saved) log.warn(`持久化的模型档位 "${saved}" 不可用，回退默认`);
-      this.current = createLLMClient(defaultCfg);
-      this.currentName = `默认（${defaultCfg.model}）`;
+      this.current = scope?.fallback ?? createLLMClient(defaultCfg);
+      this.currentName = scope ? "" : `默认（${defaultCfg.model}）`;
     }
+  }
+
+  forMember(room: string, id: string, name: string): ModelSwitcher {
+    return new ModelSwitcher(this.profiles, this.defaultCfg, this.db, {
+      key: `member_model:${JSON.stringify([room, id])}`, name, fallback: this,
+    });
   }
 
   private apply(name: string): void {
@@ -80,12 +87,13 @@ export class ModelSwitcher implements LLMClient {
   }
 
   activeName(): string {
-    return this.currentName;
+    return this.currentName || this.scope?.fallback.activeName() || "";
   }
 
   activeDisplayName(): string {
     const profile = this.profiles.find((p) => p.name === this.currentName);
-    return profile ? `${serviceName(profile)} / ${displayName(profile)}` : this.currentName;
+    return profile ? `${serviceName(profile)} / ${displayName(profile)}`
+      : this.currentName || this.scope?.fallback.activeDisplayName() || "";
   }
 
   switchTo(name: string): { ok: boolean; message: string } {
@@ -103,18 +111,20 @@ export class ModelSwitcher implements LLMClient {
       return { ok: true, message: `当前已经在用 ${serviceName(p)} / ${displayName(p)} 了。` };
     }
     this.apply(p.name);
-    this.db.kvSet(KV_KEY, p.name);
+    this.db.kvSet(this.scope?.key ?? KV_KEY, p.name);
     log.info(`模型已切换: ${serviceName(p)} / ${displayName(p)}`);
     return {
       ok: true,
-      message: `已切换到 ${serviceName(p)} / ${displayName(p)}。之后所有对话、群聊和记忆摘要都使用它；重启后保持。`,
+      message: this.scope
+        ? `${this.scope.name}已切换到 ${serviceName(p)} / ${displayName(p)}。此成员在已绑定私聊和后台任务中使用该模型。`
+        : `已切换到 ${serviceName(p)} / ${displayName(p)}。之后所有对话、群聊和记忆摘要都使用它；重启后保持。`,
     };
   }
 
   listProviders(): string {
     const lines = this.providerNames().map((name, i) => {
       const profiles = this.modelsFor(name);
-      const mark = profiles.some((p) => p.name === this.currentName) ? " ← 当前" : "";
+      const mark = profiles.some((p) => p.name === this.activeName()) ? " ← 当前" : "";
       return `${i + 1}. ${name}（${profiles.length ? `${profiles.length} 个模型` : "目录暂不可用"}）${mark}`;
     });
     return ["先选择模型商：", ...lines, "", "回复模型商名称或序号，然后选择具体模型。", `当前：${this.activeDisplayName()}`].join("\n");
@@ -125,7 +135,7 @@ export class ModelSwitcher implements LLMClient {
     if (!this.providerNames().includes(provider)) return `没有叫 "${provider}" 的模型商。\n${this.listProviders()}`;
     const models = this.modelsFor(provider);
     const lines = models.map((p, i) => {
-      const mark = p.name === this.currentName ? " ← 当前" : "";
+      const mark = p.name === this.activeName() ? " ← 当前" : "";
       const unavailable = p.provider !== "mock" && !p.apiKey ? "（API key 未配置）" : "";
       return `${i + 1}. ${displayName(p)}${unavailable}${mark}`;
     });

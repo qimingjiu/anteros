@@ -3,24 +3,19 @@ import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createRequire } from "node:module";
 import { AttachmentBuilder } from "discord.js";
+import { ffmpegPath, localVoiceInput } from "../cross-platform/voice.js";
 
 const run = promisify(execFile);
-const require = createRequire(import.meta.url);
-
-function ffmpegPath(): string {
-  try { const p = require("ffmpeg-static") as string | null; if (p) return p; } catch { /* fall through */ }
-  return "ffmpeg";
-}
 
 /** Convert any audio (local path or http url) to a Discord native voice-message attachment (ogg/opus + waveform + duration). */
-export async function buildVoiceAttachment(input: string): Promise<AttachmentBuilder> {
+export async function buildVoiceAttachment(input: string, localOnly = false): Promise<AttachmentBuilder> {
   const ff = ffmpegPath();
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "dcvoice-"));
   try {
     const ogg = path.join(dir, "voice-message.ogg");
-    await run(ff, ["-y", "-loglevel", "error", "-i", input, "-vn", "-ac", "1", "-ar", "48000", "-c:a", "libopus", "-b:a", "48k", "-application", "voip", ogg], { timeout: 60000 });
+    const source = localOnly ? localVoiceInput(input) : ["-i", input];
+    await run(ff, ["-y", "-nostdin", "-loglevel", "error", ...source, "-vn", "-ac", "1", "-ar", "48000", "-c:a", "libopus", "-b:a", "48k", "-application", "voip", ogg], { timeout: 60000, windowsHide: true });
     // Decode to 8 kHz mono s16le to measure duration and draw the waveform.
     const { stdout } = await run(ff, ["-loglevel", "error", "-i", ogg, "-ac", "1", "-ar", "8000", "-f", "s16le", "-"], { encoding: "buffer", maxBuffer: 64 * 1024 * 1024, timeout: 60000 }) as unknown as { stdout: Buffer };
     const samples = Math.floor(stdout.length / 2);

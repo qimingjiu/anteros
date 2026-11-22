@@ -33,6 +33,7 @@ export interface DBRow_Message {
 
 export interface DBRow_SendTask {
   id: number;
+  account_id: string | null;
   task_key: string | null;
   kind: string;
   conversation_type: "group" | "private";
@@ -261,6 +262,11 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY(account_id, user_id)
   );
   `,
+  // v5: Every outbox entry has one destination account. Older rows belong to the primary account.
+  `
+  ALTER TABLE send_tasks ADD COLUMN account_id TEXT;
+  CREATE INDEX IF NOT EXISTS idx_send_tasks_account_status ON send_tasks(account_id, status, id);
+  `,
 ];
 
 export class Database {
@@ -479,10 +485,10 @@ export class Database {
       | undefined;
   }
 
-  getMessageById(conversationId: string, messageId: string): DBRow_Message | undefined {
-    return this.db
-      .prepare("SELECT * FROM messages WHERE conversation_id = ? AND message_id = ?")
-      .get(conversationId, messageId) as DBRow_Message | undefined;
+  getMessageById(conversationId: string, messageId: string, accountId?: string): DBRow_Message | undefined {
+    const rows = this.db.prepare("SELECT * FROM messages WHERE conversation_id = ? AND message_id = ? AND (? IS NULL OR account_id = ?) LIMIT 2")
+      .all(conversationId, messageId, accountId ?? null, accountId ?? null) as unknown as DBRow_Message[];
+    return rows.length === 1 ? rows[0] : undefined;
   }
 
   markRecalled(conversationId: string, messageId: string, accountId?: string): boolean {
@@ -500,27 +506,22 @@ export class Database {
     return Number(r.changes) > 0;
   }
 
-  recentMessages(conversationId: string, limit: number, beforeIso?: string): DBRow_Message[] {
-    if (beforeIso) {
-      return this.db
-        .prepare(
-          "SELECT * FROM messages WHERE conversation_id = ? AND sent_at <= ? AND status = 'active' ORDER BY sent_at DESC, id DESC LIMIT ?",
-        )
-        .all(conversationId, beforeIso, limit) as unknown as DBRow_Message[];
-    }
+  recentMessages(conversationId: string, limit: number, beforeIso?: string, accountId?: string): DBRow_Message[] {
     return this.db
       .prepare(
-        "SELECT * FROM messages WHERE conversation_id = ? AND status = 'active' ORDER BY sent_at DESC, id DESC LIMIT ?",
+        `SELECT * FROM messages WHERE conversation_id = ? AND status = 'active'
+          AND (? IS NULL OR sent_at <= ?) AND (? IS NULL OR account_id = ?)
+          ORDER BY sent_at DESC, id DESC LIMIT ?`,
       )
-      .all(conversationId, limit) as unknown as DBRow_Message[];
+      .all(conversationId, beforeIso ?? null, beforeIso ?? null, accountId ?? null, accountId ?? null, limit) as unknown as DBRow_Message[];
   }
 
-  messagesInRange(groupId: string, startIso: string, endIso: string): DBRow_Message[] {
+  messagesInRange(groupId: string, startIso: string, endIso: string, accountId?: string): DBRow_Message[] {
     return this.db
       .prepare(
-        "SELECT * FROM messages WHERE group_id = ? AND sent_at >= ? AND sent_at < ? ORDER BY sent_at ASC, id ASC",
+        "SELECT * FROM messages WHERE group_id = ? AND sent_at >= ? AND sent_at < ? AND (? IS NULL OR account_id = ?) ORDER BY sent_at ASC, id ASC",
       )
-      .all(groupId, startIso, endIso) as unknown as DBRow_Message[];
+      .all(groupId, startIso, endIso, accountId ?? null, accountId ?? null) as unknown as DBRow_Message[];
   }
 
   messageCountInRange(groupId: string, startIso: string, endIso: string): number {
@@ -530,14 +531,15 @@ export class Database {
     return Number(r.c);
   }
 
-  senderStatsInRange(groupId: string, startIso: string, endIso: string): { sender_id: string; sender_name: string; c: number }[] {
+  senderStatsInRange(groupId: string, startIso: string, endIso: string, accountId?: string): { sender_id: string; sender_name: string; c: number }[] {
     return this.db
       .prepare(
         `SELECT sender_id, MAX(sender_name) AS sender_name, COUNT(*) AS c
          FROM messages WHERE group_id = ? AND sent_at >= ? AND sent_at < ? AND status = 'active'
+         AND (? IS NULL OR account_id = ?)
          GROUP BY sender_id ORDER BY c DESC LIMIT 50`,
       )
-      .all(groupId, startIso, endIso) as unknown as { sender_id: string; sender_name: string; c: number }[];
+      .all(groupId, startIso, endIso, accountId ?? null, accountId ?? null) as unknown as { sender_id: string; sender_name: string; c: number }[];
   }
 
   purgeOldMessages(retentionDays: number): number {
@@ -596,6 +598,7 @@ export class Database {
 
   enqueueSendTask(t: {
     taskKey?: string;
+    accountId?: string;
     kind: string;
     conversationType: "group" | "private";
     targetId: string;
@@ -610,11 +613,15 @@ export class Database {
     }
     const r = this.db
       .prepare(
-        `INSERT INTO send_tasks (task_key, kind, conversation_type, target_id, payload, status, attempts, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?)`,
+        `INSERT INTO send_tasks (task_key, account_id, kind, conversation_type, target_id, payload, status, attempts, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?)`,
       )
-      .run(t.taskKey ?? null, t.kind, t.conversationType, t.targetId, JSON.stringify(t.payload), now, now);
+      .run(t.taskKey ?? null, t.accountId ?? null, t.kind, t.conversationType, t.targetId, JSON.stringify(t.payload), now, now);
     return { id: Number(r.lastInsertRowid), reused: false };
+  }
+
+  assignLegacySendTasks(accountId: string): void {
+    this.db.prepare("UPDATE send_tasks SET account_id = ? WHERE account_id IS NULL").run(accountId);
   }
 
   claimSendTask(id: number): DBRow_SendTask | undefined {
@@ -651,11 +658,10 @@ export class Database {
       .run(nowIso(), id);
   }
 
-  resetInFlightTasks(): { requeued: number; unknowned: number } {
+  resetInFlightTasks(accountId?: string): { requeued: number; unknowned: number } {
     // 文件、文档、工具图片、报告、主动消息和反戳可能已成功，恢复时不自动重发。
-    const tasks = this.db
-      .prepare("SELECT id, kind, payload FROM send_tasks WHERE status = 'in_flight'")
-      .all() as { id: number; kind: string; payload: string }[];
+    const tasks = this.db.prepare("SELECT id, kind, payload FROM send_tasks WHERE status = 'in_flight' AND (? IS NULL OR account_id = ?)")
+      .all(accountId ?? null, accountId ?? null) as { id: number; kind: string; payload: string }[];
     let requeued = 0;
     let unknowned = 0;
     const now = nowIso();
@@ -666,7 +672,7 @@ export class Database {
         const payload = JSON.parse(t.payload) as { kind?: unknown } | null;
         oneShotPayload = payload !== null && typeof payload === "object" && (payload.kind === "file" || payload.kind === "poke");
       } catch { /* 坏载荷不能阻断其他任务恢复；普通任务下次执行时会明确失败。 */ }
-      const uncertain = /^(?:report|proactive|document|poke|minimax_|tool_image)/i.test(t.kind) || oneShotPayload;
+      const uncertain = /^(?:report|proactive|document|poke|minimax_|tool_image|cross_platform_|family_)/i.test(t.kind) || oneShotPayload;
       reset.run(uncertain ? "unknown" : "queued", now, t.id);
       if (uncertain) unknowned++;
       else requeued++;
@@ -674,10 +680,10 @@ export class Database {
     return { requeued, unknowned };
   }
 
-  pendingSendTasks(limit: number): DBRow_SendTask[] {
+  pendingSendTasks(limit: number, accountId?: string): DBRow_SendTask[] {
     return this.db
-      .prepare("SELECT * FROM send_tasks WHERE status = 'queued' ORDER BY id ASC LIMIT ?")
-      .all(limit) as unknown as DBRow_SendTask[];
+      .prepare("SELECT * FROM send_tasks WHERE status = 'queued' AND (? IS NULL OR account_id = ?) ORDER BY id ASC LIMIT ?")
+      .all(accountId ?? null, accountId ?? null, limit) as unknown as DBRow_SendTask[];
   }
 
   sendTaskById(id: number): DBRow_SendTask | undefined {

@@ -267,6 +267,9 @@ export class DiscordProvider implements Provider {
   private async sendTo(channelId: string | undefined, userId: string | undefined, segments: MessageSegment[]): Promise<SendResult> {
     const client = this.client;
     if (!client?.isReady()) return { status: "failed", error: "Discord 未连接" };
+    const strictVoice = segments.some(segment => segment.type === "record" && segment.data.nativeOnly);
+    if (strictVoice && segments.length !== 1) return { status: "failed", error: "Discord 原生语音需要单独发送" };
+    let submittingVoice = false;
     try {
       const channel = channelId
         ? await client.channels.fetch(channelId)
@@ -286,6 +289,15 @@ export class DiscordProvider implements Provider {
       }
       for (const v of voices) {
         const send = (channel as { send(o: MessageCreateOptions): Promise<Message> }).send.bind(channel);
+        if (strictVoice) {
+          let attachment: AttachmentBuilder;
+          try { attachment = await buildVoiceAttachment(v, true); }
+          catch { return { status: "failed", error: "Discord 原生语音转换失败" }; }
+          submittingVoice = true;
+          const sent = await send({ files: [attachment], flags: MessageFlags.IsVoiceMessage } as MessageCreateOptions);
+          lastId = sent.id;
+          continue;
+        }
         try {
           const att = await buildVoiceAttachment(v);
           const sent = await send({ files: [att], flags: MessageFlags.IsVoiceMessage } as MessageCreateOptions);
@@ -298,6 +310,7 @@ export class DiscordProvider implements Provider {
       }
       return { status: "confirmed", messageId: lastId };
     } catch (e) {
+      if (submittingVoice) return { status: "unknown", error: "Discord 原生语音回执不明" };
       return { status: "failed", error: (e as Error).message };
     }
   }

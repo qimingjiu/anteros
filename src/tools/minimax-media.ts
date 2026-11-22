@@ -7,6 +7,7 @@ import { Agent as HttpAgent } from "undici";
 import { detectAll } from "tinyld";
 import type { Database } from "../db/index.js";
 import type { Gateway } from "../gateway/index.js";
+import type { CrossPlatformDelivery, CrossPlatformDestination } from "../cross-platform/index.js";
 import type { MessageRecord, SendStatus, ToolDef, ToolContext } from "../types.js";
 import { sleep, stableHash } from "../util/misc.js";
 import { isPrivateAddress, readBounded } from "./web-http.js";
@@ -22,7 +23,7 @@ export interface MiniMaxMediaResult {
   filename?: string;
   voiceId?: string;
   language?: "English";
-  destination: "current" | "private";
+  destination: string;
   reused: boolean;
   reason?: string;
   detail: string;
@@ -37,6 +38,7 @@ export interface MiniMaxMediaDeps {
   providerOutputDir?: string;
   waitTimeoutMs?: number;
   generationTimeoutMs?: number;
+  crossPlatform?: CrossPlatformDelivery;
   /** Dependency injection for offline validation. Production uses the pinned, bounded downloader. */
   downloadAsset?: typeof downloadMiniMaxAsset;
 }
@@ -189,13 +191,15 @@ export class MiniMaxMediaService {
   toolsFor(message: MessageRecord): ToolDef[] {
     if (!this.allowed(message)) return [];
     const delivery = { type: "string", enum: ["current", "private"], description: "默认发当前会话；private 只发给当前请求主人本人。" };
+    const crossDestination = this.deps.crossPlatform
+      ? { destination: { type: "string", description: "主人本条原话明确要求跨端发送时，填写其中已绑定的目的地别名。" } } : {};
     return [
       { name: "generate_image", description: "主人要求画图时生成；回应主人时你也可以自己判断，在图能让回复更好时主动画一张（每天自主上限 40 张，别为了证明能力而画）。使用 MiniMax 生成一张图片并直接发送到当前会话（QQ 或 Discord 都支持）。仅 confirmed 表示协议确认成功，unknown 禁止重试。", private: true,
         inputSchema: { type: "object", properties: { prompt: { type: "string", minLength: 1, maxLength: 2000 },
-          aspect_ratio: { type: "string", enum: ["1:1", "16:9", "4:3", "3:2", "2:3", "3:4", "9:16", "21:9"] }, delivery }, required: ["prompt"], additionalProperties: false },
+          aspect_ratio: { type: "string", enum: ["1:1", "16:9", "4:3", "3:2", "2:3", "3:4", "9:16", "21:9"] }, delivery, ...crossDestination }, required: ["prompt"], additionalProperties: false },
         execute: async args => JSON.stringify(await this.createAndSend("image", args, message)) },
       { name: "generate_english_speech", description: "主人要求语音时生成；回应主人时你也可以自己判断，在一段英文语音能让回复更好时主动发（每天自主上限 30 条）。将英文正文用固定英文男声生成并作为语音消息发送（QQ 或 Discord 都支持）。报错时照原文转述，不要编造原因。仅允许英文，禁止中文/其他语言、女声、音色克隆或控制标签；非英文须先改写为英文。unknown 禁止重试。", private: true,
-        inputSchema: { type: "object", properties: { text: { type: "string", minLength: 1, maxLength: 2000 }, delivery }, required: ["text"], additionalProperties: false },
+        inputSchema: { type: "object", properties: { text: { type: "string", minLength: 1, maxLength: 2000 }, delivery, ...crossDestination }, required: ["text"], additionalProperties: false },
         execute: async args => JSON.stringify(await this.createAndSend("speech", args, message)) },
     ];
   }
@@ -208,6 +212,13 @@ export class MiniMaxMediaService {
   async createAndSend(kind: MiniMaxMediaKind, args: Record<string, unknown>, message: MessageRecord): Promise<MiniMaxMediaResult> {
     if (!this.allowed(message)) throw new MediaGateError("媒体生成只允许由当前账号主人的有效实时消息请求");
     if (kind !== "image" && kind !== "speech") throw new MediaGateError("不支持的媒体类型");
+    const allowed = kind === "image" ? ["prompt", "aspect_ratio", "delivery"] : ["text", "delivery"];
+    if (this.deps.crossPlatform) allowed.push("destination");
+    if (Object.keys(args).some(key => !allowed.includes(key))) throw new MediaGateError("媒体参数不接受音色、模型、语言、路径、URL 或任意收件人");
+    if (args.delivery !== undefined && args.delivery !== "current" && args.delivery !== "private") throw new MediaGateError("delivery 只允许 current 或 private");
+    if (args.destination !== undefined && typeof args.destination !== "string") throw new MediaGateError("跨端目的地必须是已绑定的别名");
+    const route = this.deps.crossPlatform?.authorize(message, args.destination, kind === "image" ? "image" : "voice");
+    if (route && args.delivery === "private") throw new MediaGateError("请只指定一个媒体接收目的地");
     // Quotes, webpages and tool results never authorize spending. A short confirmation counts only with a recent bot media draft.
     const ownerText = message.segments.filter(segment => segment.type === "text").map(segment => segment.type === "text" ? segment.data.text : "").join("\n")
       .replace(/```[\s\S]*?```/gu, "").replace(/^\s*>.*$/gmu, "");
@@ -216,11 +227,12 @@ export class MiniMaxMediaService {
       : /(?:不要|别|不准|不允许|禁止|不用|无需).{0,8}(?:语音|朗读|男声|读出来)|(?:do not|don't|never).{0,12}(?:speak|speech|audio|voice|read aloud)/i;
     const requested = kind === "image"
       ? /(?:画|绘制|绘画|生成|制作|做|来|发|整|看看).{0,16}(?:图|插画|照|自拍|头像|壁纸|表情包|image|picture|pic)|(?:draw|paint|generat\w*|creat\w*|send).{0,24}(?:image|picture|illustration|photo)/i
-      : /(?:生成|制作|发|来|用|转成|转为).{0,16}(?:语音|男声|speech|audio|voice)|(?:朗读|读出来|念出来|说一句)|(?:generat\w*|creat\w*|send|speak|read).{0,24}(?:speech|audio|voice|aloud)/i;
+      : /(?:生成|制作|做|发|来|用|转成|转为|给我).{0,16}(?:语音|男声|speech|audio|voice)|(?:朗读|读出来|念出来|说一句)|(?:generat\w*|creat\w*|send|speak|read).{0,24}(?:speech|audio|voice|aloud)/i;
     const drawObject = /(?:^|[。！？!?\n，,；;])\s*(?:请\s*)?(?:(?:你\s*)?(?:帮我|替我|给我)|我(?:想|希望)(?:要)?(?:让)?你|你)?\s*(?:画|绘制)\s*(?:一?(?:只|个|张|幅|匹|头|朵|条|棵)|我|你|他|她|它|咱们|我们|自己|这只|那只|这个|那个)/u;
     const discussion = /(?:怎么|如何|怎样|是否支持|我想知道).{0,30}(?:画|绘|生成|制作|语音)/u.test(ownerText);
     const directRequest = requested.test(ownerText) || (kind === "image" && drawObject.test(ownerText));
     const draftEventKey = directRequest ? undefined : recentMediaDraft(this.deps, message, kind);
+    if (route && !directRequest) throw new MediaGateError("跨端生成并发送需要主人在本条消息里明确要求生成相应媒体");
     // 2026-10-26 主人授权：图片可由 κόραξ 自己判断主动生成（只在回应主人的实时消息时），每天有上限。
     const selfInitiated = !forbidden.test(ownerText) && !(directRequest || draftEventKey !== undefined);
     if (selfInitiated) {
@@ -228,13 +240,11 @@ export class MiniMaxMediaService {
     } else if (forbidden.test(ownerText) || discussion || !(directRequest || draftEventKey !== undefined)) {
       throw new MediaGateError(kind === "image" ? "主人在这条消息里说了不要画图，所以没有生成" : "主人在这条消息里说了不要语音，所以没有生成");
     }
-    const allowed = kind === "image" ? ["prompt", "aspect_ratio", "delivery"] : ["text", "delivery"];
-    if (Object.keys(args).some(key => !allowed.includes(key))) throw new MediaGateError("媒体参数不接受音色、模型、语言、路径、URL 或任意收件人");
-    if (args.delivery !== undefined && args.delivery !== "current" && args.delivery !== "private") throw new MediaGateError("delivery 只允许 current 或 private");
-    const destination = args.delivery === "private" ? "private" : "current";
-    const conversationType = message.groupId && destination === "current" ? "group" : "private";
+    const destination = route?.id ?? (args.delivery === "private" ? "private" : "current");
+    const conversationType = message.groupId && args.delivery !== "private" ? "group" : "private";
     const targetId = conversationType === "group" ? message.groupId! : message.senderId;
-    if (!/^[1-9]\d*$/.test(targetId) || message.conversationId !== (message.groupId ? `group_${message.groupId}` : `private_${message.senderId}`)) throw new MediaGateError("媒体请求的真实会话无效");
+    const validTarget = message.providerId === "telegram" ? /^-?[1-9]\d*(?::[1-9]\d*)?$/u : /^[1-9]\d*$/u;
+    if (!validTarget.test(targetId) || message.conversationId !== (message.groupId ? `group_${message.groupId}` : `private_${message.senderId}`)) throw new MediaGateError("媒体请求的真实会话无效");
     let request: Record<string, unknown>;
     if (kind === "speech") request = { text: validateEnglishSpeech(args.text), voice_id: MINIMAX_ENGLISH_MALE_VOICE,
       language_boost: "English", model: "speech-2.8-hd", format: "mp3", sample_rate: 24000, bitrate: 128000, channel: 1,
@@ -248,15 +258,15 @@ export class MiniMaxMediaService {
     const key = `minimax_media:v1:${stableHash(JSON.stringify([message.accountId, message.conversationId, message.senderId, draftEventKey ?? message.eventKey, kind]))}`;
     const priorRunning = this.running.get(key);
     if (priorRunning) return priorRunning;
-    const operation = this.deliver(key, kind, request, message, conversationType, targetId, destination);
+    const operation = this.deliver(key, kind, request, message, conversationType, targetId, destination, route);
     this.running.set(key, operation);
     try { return await operation; }
     finally { if (this.running.get(key) === operation) this.running.delete(key); }
   }
 
   private async deliver(key: string, kind: MiniMaxMediaKind, request: Record<string, unknown>, message: MessageRecord,
-    conversationType: "group" | "private", targetId: string, destination: "current" | "private"): Promise<MiniMaxMediaResult> {
-    const requestHash = stableHash(JSON.stringify([request, conversationType, targetId]));
+    conversationType: "group" | "private", targetId: string, destination: string, route?: CrossPlatformDestination): Promise<MiniMaxMediaResult> {
+    const requestHash = stableHash(JSON.stringify([request, conversationType, targetId, ...(route ? [route.id, route.accountId, route.targetId] : [])]));
     const raw = this.deps.db.kvGet(key);
     let journal: Journal | undefined;
     let journalCorrupted = false;
@@ -316,6 +326,18 @@ export class MiniMaxMediaService {
       }
     }
     const artifact = journal.artifact!;
+    if (route) {
+      let file: string;
+      try { file = await this.localPath(artifact); }
+      catch { return result("failed", "媒体文件当前不可用；没有自动重新生成。", { reason: "asset_unavailable" }); }
+      const receipt = await this.deps.crossPlatform!.enqueue(message, route, {
+        kind: kind === "image" ? "image" : "voice",
+        files: [{ filename: artifact.filename, path: file }],
+      }, { waitTimeoutMs: this.deps.waitTimeoutMs ?? 21500 });
+      return result(receipt.status, receipt.detail, {
+        taskId: receipt.taskId, bytes: artifact.bytes, filename: artifact.filename, reused: reused || receipt.reused,
+      });
+    }
     const priorTask = this.deps.db.db.prepare("SELECT id FROM send_tasks WHERE task_key = ?").get(key) as { id: number } | undefined;
     let task: { id: number; reused: boolean };
     if (priorTask) task = { id: priorTask.id, reused: true };
@@ -340,15 +362,22 @@ export class MiniMaxMediaService {
     return result(status, details[status], { taskId: task.id, bytes: artifact.bytes, filename: artifact.filename, reused: reused || task.reused });
   }
 
-  private async providerPath(artifact: Artifact): Promise<string> {
+  private async localPath(artifact: Artifact): Promise<string> {
     const root = await fs.realpath(this.deps.outputDir);
     const absolute = await fs.realpath(path.join(root, artifact.relativePath));
     const relative = path.relative(root, absolute);
     if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error("媒体文件不在生成目录");
     const stat = await fs.stat(absolute);
     if (!stat.isFile() || stat.size !== artifact.bytes || stat.size > 16 * 1024 * 1024) throw new Error("媒体文件大小无效");
+    return absolute;
+  }
+
+  private async providerPath(artifact: Artifact): Promise<string> {
+    const absolute = await this.localPath(artifact);
     let providerPath = absolute;
     if (this.deps.providerOutputDir) {
+      const root = await fs.realpath(this.deps.outputDir);
+      const relative = path.relative(root, absolute);
       if (process.platform !== "win32") {
         await fs.chmod(root, 0o755); await fs.chmod(path.dirname(absolute), 0o755); await fs.chmod(absolute, 0o644);
       }

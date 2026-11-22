@@ -33,7 +33,7 @@ export class RecallTools {
       ids = [m.replyToMessageId];
     } else {
       const n = Math.min(5, Math.max(1, Number(args.count ?? 1) || 1));
-      ids = db.recentMessages(m.conversationId, 60, new Date().toISOString())
+      ids = db.recentMessages(m.conversationId, 60, new Date().toISOString(), m.accountId)
         .filter(r => r.sender_id === selfId && r.status === "active" && r.account_id === m.accountId && !r.message_id.startsWith("call-"))
         .slice(0, n).map(r => r.message_id);
       if (!ids.length) return { ok: false, reason: "当前会话里找不到你最近发的消息" };

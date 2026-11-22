@@ -1,8 +1,8 @@
 {
-  "name": "qq-group-bot",
+  "name": "anteros",
   "version": "0.1.0",
   "private": true,
-  "description": "QQ 群聊机器人：OneBot v11 接入、群聊记忆、工具能力与 Markdown 日报",
+  "description": "跨 QQ、Discord 和 Telegram 的聊天机器人与多人家庭",
   "type": "module",
   "engines": {
     "node": ">=22.22.2"

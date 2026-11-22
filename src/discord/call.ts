@@ -227,7 +227,7 @@ export class VoiceCallService {
     if (!db) return "";
     try {
       const self = this.deps.selfId?.();
-      const rows = db.recentMessages(conversationId, 14).reverse().filter(r => r.status === "active" && r.text_content.trim());
+      const rows = db.recentMessages(conversationId, 14, undefined, this.deps.accountId).reverse().filter(r => r.status === "active" && r.text_content.trim());
       if (!rows.length) return "";
       const lines = rows.map(r => `${r.sender_id === self ? "you" : (r.sender_name || "her")}: ${r.text_content.replace(/\s+/g, " ").slice(0, 200)}`);
       return `\n\nRecent text chat right before this call (for context; she may refer to it):\n${lines.join("\n")}`;

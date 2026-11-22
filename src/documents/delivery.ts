@@ -5,6 +5,7 @@ import type { Gateway } from "../gateway/index.js";
 import type { MessageRecord, SendStatus } from "../types.js";
 import { stableHash, sleep } from "../util/misc.js";
 import type { DocumentService, DocumentRequest, DocumentArtifact } from "./index.js";
+import type { CrossPlatformDelivery, CrossPlatformDestination } from "../cross-platform/index.js";
 
 interface DeliveryDeps {
   db: Database;
@@ -13,6 +14,7 @@ interface DeliveryDeps {
   accountId: string;
   providerOutputDir?: string;
   waitTimeoutMs?: number;
+  crossPlatform?: CrossPlatformDelivery;
 }
 
 export interface DocumentDeliveryResult {
@@ -22,7 +24,7 @@ export interface DocumentDeliveryResult {
   bytes: number;
   taskId: number;
   status: SendStatus;
-  destination: "current" | "private";
+  destination: string;
   reused: boolean;
   detail: string;
 }
@@ -42,29 +44,35 @@ export class DocumentDelivery {
       throw new Error("文档只能由当前账号的有效实时消息请求");
     }
     const allowed = new Set(["format", "markdown", "title", "filename", "delivery"]);
+    if (this.deps.crossPlatform) allowed.add("destination");
     if (Object.keys(args).some(key => !allowed.has(key))) throw new Error("文档参数不接受文件路径、收件人或其他额外字段");
     if (typeof args.format !== "string" || !["md", "docx", "pdf"].includes(args.format)) throw new Error("文档格式只支持 md、docx、pdf");
     if (typeof args.markdown !== "string") throw new Error("markdown 必须是完整的文档正文字符串");
     if (args.title !== undefined && typeof args.title !== "string") throw new Error("文档标题必须是字符串");
     if (args.filename !== undefined && typeof args.filename !== "string") throw new Error("文件名必须是字符串");
     if (args.delivery !== undefined && args.delivery !== "current" && args.delivery !== "private") throw new Error("delivery 只支持 current 或 private");
-    const destination = args.delivery === "private" ? "private" : "current";
-    const conversationType = message.groupId && destination === "current" ? "group" : "private";
+    if (args.destination !== undefined && typeof args.destination !== "string") throw new Error("跨端目的地必须是已绑定的别名");
+    const route = this.deps.crossPlatform?.authorize(message, args.destination, "file");
+    if (route && args.delivery === "private") throw new Error("请只指定一个文档接收目的地");
+    const destination = route?.id ?? (args.delivery === "private" ? "private" : "current");
+    const conversationType = message.groupId && args.delivery !== "private" ? "group" : "private";
     const targetId = conversationType === "group" ? message.groupId! : message.senderId;
-    if (!/^[1-9]\d*$/.test(targetId)) throw new Error("文档接收者不是有效的 QQ 号码");
+    const validTarget = message.providerId === "telegram" ? /^-?[1-9]\d*(?::[1-9]\d*)?$/u : /^[1-9]\d*$/u;
+    if (!validTarget.test(targetId)) throw new Error("文档接收者不是有效的 QQ 号码");
     const request: DocumentRequest = { format: args.format as DocumentRequest["format"], markdown: args.markdown,
       title: args.title as string | undefined, filename: args.filename as string | undefined };
-    const taskKey = `document:${stableHash(JSON.stringify([message.accountId, message.eventKey, message.senderId, conversationType, targetId, request]))}`;
+    const taskKey = `document:${stableHash(JSON.stringify([message.accountId, message.eventKey, message.senderId,
+      conversationType, targetId, request, ...(route ? [route.id, route.accountId, route.targetId] : [])]))}`;
     const existing = this.operations.get(taskKey);
     if (existing) return existing;
-    const operation = this.deliver(request, taskKey, conversationType, targetId, destination);
+    const operation = this.deliver(request, taskKey, conversationType, targetId, destination, message, route);
     this.operations.set(taskKey, operation);
     try { return await operation; }
     finally { if (this.operations.get(taskKey) === operation) this.operations.delete(taskKey); }
   }
 
   private async deliver(request: DocumentRequest, taskKey: string, conversationType: "group" | "private", targetId: string,
-    destination: "current" | "private"): Promise<DocumentDeliveryResult> {
+    destination: string, message: MessageRecord, route?: CrossPlatformDestination): Promise<DocumentDeliveryResult> {
     const metadataKey = `${taskKey}:artifact`;
     const prior = this.deps.db.kvGet(metadataKey);
     let artifact: DocumentArtifact;
@@ -72,6 +80,15 @@ export class DocumentDelivery {
     else {
       artifact = await this.deps.service.create(request);
       this.deps.db.kvSet(metadataKey, JSON.stringify(artifact));
+    }
+    if (route) {
+      const filePath = await this.localPath(artifact.path);
+      const receipt = await this.deps.crossPlatform!.enqueue(message, route, {
+        kind: "file",
+        files: [{ filename: artifact.filename, path: filePath }],
+      }, { waitTimeoutMs: this.deps.waitTimeoutMs ?? 21500 });
+      return { ...receipt, generated: true, filename: artifact.filename, format: artifact.format,
+        bytes: artifact.bytes, reused: Boolean(prior) || receipt.reused };
     }
     const existing = this.deps.db.db.prepare("SELECT * FROM send_tasks WHERE task_key = ?").get(taskKey) as DBRow_SendTask | undefined;
     let taskId: number;
@@ -105,7 +122,7 @@ export class DocumentDelivery {
       taskId, status: task.status, destination, reused, detail: details[task.status] };
   }
 
-  private async providerPath(filePath: string): Promise<string> {
+  private async localPath(filePath: string): Promise<string> {
     const root = await fs.realpath(this.deps.service.outputDir);
     const absolute = await fs.realpath(filePath);
     const relative = path.relative(root, absolute);
@@ -114,8 +131,15 @@ export class DocumentDelivery {
     }
     const stat = await fs.stat(absolute);
     if (!stat.isFile() || stat.size > this.deps.service.maxFileBytes) throw new Error("文档文件无效或超过上传大小限额");
+    return absolute;
+  }
+
+  private async providerPath(filePath: string): Promise<string> {
+    const absolute = await this.localPath(filePath);
     const providerRoot = this.deps.providerOutputDir?.trim();
     if (!providerRoot) return absolute;
+    const root = await fs.realpath(this.deps.service.outputDir);
+    const relative = path.relative(root, absolute);
     // A container running as a different user needs to traverse the shared
     // directory and read the exported file. Metadata remains private.
     if (process.platform !== "win32") {

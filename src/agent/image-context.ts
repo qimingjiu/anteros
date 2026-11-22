@@ -1,6 +1,7 @@
 import type { Database, DBRow_Message } from "../db/index.js";
 import type { ContentPart } from "../llm/index.js";
-import type { MessageRecord } from "../types.js";
+import type { MessageRecord, Provider } from "../types.js";
+import { telegramFileIdFromUri } from "../telegram/api.js";
 
 export interface ContextImage {
   url: string;
@@ -16,6 +17,10 @@ export function messageImageUrls(message: MessageRecord): string[] {
   const urls = new Set<string>();
   for (const segment of message.segments) {
     if (segment.type !== "image" || typeof segment.data.url !== "string") continue;
+    if (message.providerId === "telegram" && telegramFileIdFromUri(segment.data.url)) {
+      urls.add(segment.data.url);
+      continue;
+    }
     try {
       const url = new URL(segment.data.url);
       if (url.protocol === "https:" || url.protocol === "http:") urls.add(segment.data.url);
@@ -165,6 +170,23 @@ export function collectImageContext(db: Database, message: MessageRecord, merged
     } else for (const record of records) collect(record, "recent");
   }
   return images.slice(0, 6);
+}
+
+export async function resolveProviderImageContext(provider: Provider, images: ContextImage[]): Promise<ContextImage[]> {
+  if (provider.providerId !== "telegram") return images;
+  const resolved = await Promise.all(images.map(async image => {
+    const fileId = telegramFileIdFromUri(image.url);
+    if (!fileId) return image;
+    if (!provider.downloadIncomingFile) return;
+    try {
+      const bytes = await provider.downloadIncomingFile({ fileId, maxBytes: 4 * 1024 * 1024, timeoutMs: 10_000 });
+      // Telegram PhotoSize objects carry JPEGs. Avoid labeling error pages or
+      // arbitrary document bytes as an image.
+      if (bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) return;
+      return { ...image, url: `data:image/jpeg;base64,${Buffer.from(bytes).toString("base64")}` };
+    } catch { return; }
+  }));
+  return resolved.filter((image): image is ContextImage => !!image);
 }
 
 export function imageContextParts(images: ContextImage[]): ContentPart[] {

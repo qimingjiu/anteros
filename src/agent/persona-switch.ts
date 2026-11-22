@@ -21,7 +21,7 @@ export interface PersonaSwitchResult {
 const DEFAULT_ID = "koraks";
 
 function parseCard(file: string): PersonaCard | null {
-  const raw = fs.readFileSync(file, "utf8");
+  const raw = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n");
   const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(raw);
   if (!m) return null;
   const meta: Record<string, string> = {};

@@ -168,7 +168,7 @@ export class ReportEngine {
       };
     }
 
-    const messages = this.db.messagesInRange(groupId, start, end);
+    const messages = this.db.messagesInRange(groupId, start, end, accountId || this.gateway.getAccountId?.());
     const messageCount = messages.length;
 
     this.db.upsertReport({
@@ -223,7 +223,7 @@ export class ReportEngine {
     messageCount: number,
   ): Promise<string> {
     const now = new Date().toISOString();
-    const stats = this.db.senderStatsInRange(groupId, start, end);
+    const stats = this.db.senderStatsInRange(groupId, start, end, accountId || this.gateway.getAccountId?.());
     const topics = this.db.topicsInRange(accountId, groupId, start, end);
     const links = this.db.linksInRange(groupId, start, end);
     const memories = this.db.memoriesInTimeRange(accountId, groupId, start, end);
