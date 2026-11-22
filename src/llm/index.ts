@@ -7,6 +7,7 @@ import { ImageInputCache } from "./image-input.js";
 import { acquireOfficialRequestSlot } from "./request-queue.js";
 import { stripLeadingThinkBlocks } from "./reply-content.js";
 import { localizeMessages } from "../util/model-time.js";
+import { MemberRouteError, retryAfterMs } from "./member-routing.js";
 
 const log = logger("llm");
 
@@ -45,6 +46,8 @@ export interface ChatMessage {
   /** Provider-required replay metadata, never user-facing reply content. */
   reasoning_content?: string;
   reasoning_details?: unknown[];
+  /** Local tool-replay identity. Removed before serializing provider requests. */
+  reasoning_scope?: string;
 }
 
 export interface ChatUsage {
@@ -63,6 +66,7 @@ export interface ChatResult {
   /** Exact assistant content for tool-protocol replay; never display or persist as a reply. */
   replayContent?: string;
   reasoningDetails?: unknown[];
+  reasoningScope?: string;
 }
 
 export interface ChatOptions {
@@ -75,6 +79,8 @@ export interface ChatOptions {
   phoneContextReceipt?: PhoneContextReceipt;
   /** Local image-selection correlation only; never sent to the model provider. */
   imageContextId?: string;
+  /** One bounded, safely classified provider attempt under the member router. */
+  memberRoute?: boolean;
 }
 
 export interface LLMClient {
@@ -133,6 +139,14 @@ class ImageRequestError extends Error {
   }
 }
 
+function classifyMemberRouteFailure(error: unknown, code: ImageFailureCode): MemberRouteError {
+  if (error instanceof MemberRouteError) return error;
+  if (code === "TIMEOUT") return new MemberRouteError("timeout");
+  if (code === "NETWORK_ERROR" || code === "REQUEST_QUEUE_ERROR") return new MemberRouteError("network");
+  if (["INVALID_JSON", "INVALID_RESPONSE", "RESPONSE_READ_ERROR", "EMPTY_CHOICES"].includes(code)) return new MemberRouteError("response");
+  return new MemberRouteError("request");
+}
+
 function imageRequestReceipt(messages: ChatMessage[], model: string, imageContextId?: string): ImageRequestReceipt | undefined {
   let imageCount = 0;
   let inlineDataCount = 0;
@@ -177,7 +191,7 @@ export class OpenAICompatibleClient implements LLMClient {
   async chat(messages: ChatMessage[], opts?: ChatOptions): Promise<ChatResult> {
     throwIfCancelled(opts?.signal);
     const models = [opts?.model ?? this.cfg.model];
-    if (opts?.model === this.cfg.model && this.cfg.fallbackModel) models.push(this.cfg.fallbackModel);
+    if (!opts?.memberRoute && opts?.model === this.cfg.model && this.cfg.fallbackModel) models.push(this.cfg.fallbackModel);
     let lastErr: Error | null = null;
 
     for (const model of models) {
@@ -187,8 +201,12 @@ export class OpenAICompatibleClient implements LLMClient {
         const resp = await this.requestOnce(messages, model, opts);
         throwIfCancelled(opts?.signal);
         const choice = resp.choices?.[0];
-        if (!choice) throw new Error("模型返回空 choices");
+        if (!choice) throw opts?.memberRoute ? new MemberRouteError("response") : new Error("模型返回空 choices");
         const rawContent = choice.message?.content ?? "";
+        if (opts?.memberRoute && (typeof rawContent !== "string" || (choice.message?.tool_calls !== undefined
+          && (!Array.isArray(choice.message.tool_calls) || choice.message.tool_calls.some(call => !call || !call.function))))) {
+          throw new MemberRouteError("response");
+        }
         const content = miniMaxResponse(this.cfg.baseUrl, model) ? stripLeadingThinkBlocks(rawContent) : rawContent;
         const usage: ChatUsage = {
           promptTokens: resp.usage?.prompt_tokens,
@@ -217,6 +235,7 @@ export class OpenAICompatibleClient implements LLMClient {
         };
       } catch (e) {
         throwIfCancelled(opts?.signal);
+        if (opts?.memberRoute) throw e;
         lastErr = e as Error;
         log.warn(`模型调用失败 model=${model}: ${lastErr.message}`);
         await cancellableSleep(500, opts?.signal);
@@ -241,6 +260,8 @@ export class OpenAICompatibleClient implements LLMClient {
       const endpoint = new URL(this.cfg.baseUrl);
       const moonshot = endpoint.protocol === "https:"
         && ["api.moonshot.cn", "api.moonshot.ai"].includes(endpoint.hostname.toLowerCase());
+      // 2026-11-17 火山方舟 Agent Plan：取不到 QQ 图片外链，需内联；kimi 只允许 temperature=1
+      const volcArk = endpoint.hostname.toLowerCase() === "ark.cn-beijing.volces.com";
       if (moonshot) {
         failureCode = "REQUEST_QUEUE_ERROR";
         releaseRequestSlot = await acquireOfficialRequestSlot(this.cfg.baseUrl, this.cfg.apiKey, externalSignal);
@@ -250,8 +271,12 @@ export class OpenAICompatibleClient implements LLMClient {
       // timeout for the request after this credential becomes available.
       timer = setTimeout(() => ctrl.abort(), this.cfg.requestTimeoutMs);
       // Model-facing times are local (e.g. "10-28 16:54"); DB keeps ISO UTC.
-      let prepared = localizeMessages(messages);
-      if (moonshot && imageReceipt) {
+      let prepared = localizeMessages(messages.map(message => {
+        if (message.reasoning_scope === undefined) return message;
+        const { reasoning_scope: _scope, ...plain } = message;
+        return plain;
+      }));
+      if ((moonshot || volcArk || this.cfg.baseUrl.includes("127.0.0.1:3018")) && imageReceipt) {
         failureCode = "IMAGE_INPUT_ERROR";
         prepared = await this.imageInputs.inlineMessages(prepared, ctrl.signal);
         const actual = imageRequestReceipt(prepared, model, opts?.imageContextId)!;
@@ -264,7 +289,7 @@ export class OpenAICompatibleClient implements LLMClient {
       };
       // Official Kimi models have fixed sampling parameters. Let the provider
       // choose its documented defaults instead of forwarding generic overrides.
-      const fixedSampling = moonshot && /^kimi-k(?:3|2\.(?:5|6)|2\.7-code(?:-highspeed)?)$/i.test(model);
+      const fixedSampling = (volcArk && /^kimi-/i.test(model)) || (this.cfg.baseUrl.includes("127.0.0.1:3018") && /^(?:gpt-[56]|o\d)/i.test(model)) || moonshot && /^kimi-k(?:3|2\.(?:5|6)|2\.7-code(?:-highspeed)?)$/i.test(model);
       if (!fixedSampling) body.temperature = opts?.temperature ?? this.cfg.temperature;
       // MiniMax's default OpenAI format embeds private thinking in content.
       // Keep thinking enabled, but ask for its dedicated non-display fields.
@@ -274,15 +299,26 @@ export class OpenAICompatibleClient implements LLMClient {
         if (/^kimi-k2\.(?:5|6)$/i.test(model)) body.thinking = { type: "disabled" };
       }
       if (opts?.tools && opts.tools.length > 0) {
-        body.tools = opts.tools;
+        // 2026-11-07 同名工具去重（DeepSeek 遇重名直接 400）
+        { const seen = new Set<string>(); body.tools = opts.tools.filter((t: any) => { const n = t?.function?.name ?? t?.name; if (!n || seen.has(n)) return false; seen.add(n); return true; }); }
         body.tool_choice = "auto";
+        // 2026-11-17 OpenAI 官方：顶层 schema 必须是纯 object（无 oneOf/anyOf/allOf/enum/not），且 tools 上限 128；内置工具优先，MCP 其次
+        if (this.cfg.baseUrl.includes("127.0.0.1:3018") && Array.isArray(body.tools)) {
+          const all = body.tools as any[];
+          const okSchema = (t: any) => { const s = t?.function?.parameters; return !s || (s.type === "object" && !["oneOf","anyOf","allOf","enum","not","const"].some(k => k in s)); };
+          const valid = all.filter(okSchema);
+          const ordered = [...valid.filter(t => !String(t?.function?.name ?? "").startsWith("mcp")), ...valid.filter(t => String(t?.function?.name ?? "").startsWith("mcp"))];
+          if (all.length !== valid.length || ordered.length > 128) log.warn("GPT官方 tools 过滤", { model, total: all.length, badSchema: all.length - valid.length, kept: Math.min(128, ordered.length) });
+          body.tools = ordered.slice(0, 128);
+        }
       } else if (opts?.tools) {
         // Omitting tools does not reliably disable calls inferred from earlier
         // assistant/tool history on compatible providers.
-        body.tool_choice = "none";
+        if (!this.cfg.baseUrl.includes("127.0.0.1:3018")) body.tool_choice = "none"; // OpenAI 官方不接受无 tools 的 tool_choice
       }
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (this.cfg.apiKey) headers.Authorization = `Bearer ${this.cfg.apiKey}`;
+      if (this.cfg.baseUrl.includes("/v1/raw")) headers["X-Client-Id"] = process.argv.some(a => a.includes("discord")) ? "discord" : "qqbot";
       const payload = JSON.stringify(body);
       const receipt = opts?.phoneContextReceipt;
       if (receipt) {
@@ -304,6 +340,11 @@ export class OpenAICompatibleClient implements LLMClient {
         signal: ctrl.signal,
       });
       httpStatus = resp.status;
+      if (opts?.memberRoute && !resp.ok) {
+        failureCode = "HTTP_ERROR";
+        void resp.body?.cancel().catch(() => undefined);
+        throw new MemberRouteError("http", httpStatus, retryAfterMs(resp.headers.get("retry-after")));
+      }
       failureCode = "RESPONSE_READ_ERROR";
       const text = await resp.text();
       let json: OpenAIResp;
@@ -313,7 +354,7 @@ export class OpenAICompatibleClient implements LLMClient {
         failureCode = "INVALID_JSON";
         throw new Error(`模型返回非 JSON (HTTP ${resp.status}): ${text.slice(0, 200)}`);
       }
-      if (imageReceipt && (!json || typeof json !== "object" || Array.isArray(json))) {
+      if ((imageReceipt || opts?.memberRoute) && (!json || typeof json !== "object" || Array.isArray(json))) {
         failureCode = "INVALID_RESPONSE";
         throw new Error("模型返回无效响应结构");
       }
@@ -334,15 +375,22 @@ export class OpenAICompatibleClient implements LLMClient {
       }
       return json;
     } catch (error) {
-      if (!imageReceipt) throw error;
+      if (!imageReceipt && !opts?.memberRoute) throw error;
       if (externalSignal?.aborted) failureCode = "CANCELLED";
       else if (ctrl.signal.aborted) failureCode = "TIMEOUT";
-      const errorClass = failureCode === "CANCELLED" || failureCode === "TIMEOUT" ? "abort"
-        : failureCode === "NETWORK_ERROR" ? "network"
-          : failureCode === "REQUEST_QUEUE_ERROR" ? "queue"
-          : failureCode === "SERIALIZATION_ERROR" ? "serialization" : "response";
-      log.warn("模型图片请求失败", { ...imageReceipt, ...(httpStatus === undefined ? {} : { httpStatus }),
-        durationMs: Date.now() - started, errorClass, code: failureCode });
+      if (imageReceipt) {
+        const errorClass = failureCode === "CANCELLED" || failureCode === "TIMEOUT" ? "abort"
+          : failureCode === "NETWORK_ERROR" ? "network"
+            : failureCode === "REQUEST_QUEUE_ERROR" ? "queue"
+            : failureCode === "SERIALIZATION_ERROR" ? "serialization" : "response";
+        log.warn("模型图片请求失败", { ...imageReceipt, ...(httpStatus === undefined ? {} : { httpStatus }),
+          durationMs: Date.now() - started, errorClass, code: failureCode });
+      }
+      if (opts?.memberRoute) {
+        throwIfCancelled(externalSignal);
+        throw classifyMemberRouteFailure(error, failureCode);
+      }
+      if (!imageReceipt) throw error;
       throw new ImageRequestError(failureCode, imageReceipt.receiptId, httpStatus);
     } finally {
       clearTimeout(timer);

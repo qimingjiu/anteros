@@ -6,7 +6,8 @@ const log = logger("recall");
 
 /** recall_message: let the owner have the bot take back messages (OneBot delete_msg / Discord delete). */
 export class RecallTools {
-  constructor(private deps: { provider: Provider; db: Database; ownerIds: string[] }) {}
+  constructor(private deps: { provider: Provider; db: Database; ownerIds: string[];
+    canSee?: (source: MessageRecord, eventKey: string) => boolean }) {}
 
   toolsFor(m: MessageRecord): ToolDef[] {
     const p = this.deps.provider;
@@ -26,6 +27,7 @@ export class RecallTools {
   private async run(m: MessageRecord, args: Record<string, unknown>): Promise<object> {
     const { db, provider } = this.deps;
     const selfId = provider.health().selfId;
+    const visible = (eventKey: string) => this.deps.canSee?.(m, eventKey) ?? true;
     let ids: string[] = [];
     if (typeof args.message_id === "string" && args.message_id.trim()) ids = [args.message_id.trim()];
     else if (args.target === "replied") {
@@ -33,13 +35,19 @@ export class RecallTools {
       ids = [m.replyToMessageId];
     } else {
       const n = Math.min(5, Math.max(1, Number(args.count ?? 1) || 1));
-      ids = db.recentMessages(m.conversationId, 60, new Date().toISOString())
-        .filter(r => r.sender_id === selfId && r.status === "active" && r.account_id === m.accountId && !r.message_id.startsWith("call-"))
+      ids = db.recentMessages(m.conversationId, 60, new Date().toISOString(), m.accountId)
+        .filter(r => r.sender_id === selfId && r.status === "active" && r.account_id === m.accountId
+          && !r.message_id.startsWith("call-") && visible(r.event_key))
         .slice(0, n).map(r => r.message_id);
       if (!ids.length) return { ok: false, reason: "当前会话里找不到你最近发的消息" };
     }
     const done: string[] = [], failed: { id: string; error: string }[] = [];
     for (const id of ids) {
+      const record = this.deps.canSee ? db.getMessageById(m.conversationId, id, m.accountId) : undefined;
+      if (!visible(record?.event_key ?? "")) {
+        failed.push({ id, error: "消息不在当前房间" });
+        continue;
+      }
       const r = await provider.deleteMessage!({ conversationId: m.conversationId, groupId: m.groupId, userId: m.groupId ? undefined : m.senderId, messageId: id })
         .catch((e: Error) => ({ ok: false as const, error: e.message }));
       if (r.ok) { done.push(id); try { db.markRecalled(m.conversationId, id, m.accountId); } catch { /* ignore */ } }

@@ -6,7 +6,7 @@ export type MessageSegment =
   | { type: "at"; data: { qq: string } }
   | { type: "reply"; data: { id: string } }
   | { type: "face"; data: { id: string } }
-  | { type: "record"; data: { url?: string; file?: string } }
+  | { type: "record"; data: { url?: string; file?: string; nativeOnly?: boolean } }
   | { type: "video"; data: { url?: string; file?: string } }
   | { type: "file"; data: { fileId: string; name: string; size?: number; busId?: number } }
   | { type: "json"; data: { data: string } }
@@ -114,6 +114,8 @@ export interface Provider {
   resolveIncomingFile?(file: { fileId: string; groupId?: string; userId?: string; busId?: number }): Promise<
     { ok: true; url: string } | { ok: false; error: string }
   >;
+  /** Fetch a registered provider-issued file without exposing authenticated download URLs. */
+  downloadIncomingFile?(file: { fileId: string; maxBytes: number; timeoutMs: number }): Promise<Uint8Array>;
   getGroupMsgHistory?(
     groupId: string,
     anchor?: string,
@@ -165,6 +167,9 @@ export interface ToolContext {
   groupId?: string;
   requesterId?: string;
   isPrivate: boolean;
+  /** Trusted family identities set by the runtime, never read from tool arguments. */
+  personaId?: string;
+  roomId?: string;
   /** 单次调用的图片旁路；由调用方用独立闭包接收，避免并发会话串图。 */
   onImages?: (images: ToolImage[]) => void;
 }

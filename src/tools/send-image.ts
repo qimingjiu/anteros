@@ -3,7 +3,8 @@ import net from "node:net";
 import { Agent as HttpAgent } from "undici";
 import type { Database } from "../db/index.js";
 import type { Gateway } from "../gateway/index.js";
-import type { MessageRecord, MessageSegment, ToolDef, ToolImage } from "../types.js";
+import type { CrossPlatformDelivery, CrossPlatformDestination } from "../cross-platform/index.js";
+import type { MessageRecord, MessageSegment, SendStatus, ToolDef, ToolImage } from "../types.js";
 import { sleep, stableHash } from "../util/misc.js";
 import { isPrivateAddress, readBounded } from "./web-http.js";
 
@@ -107,7 +108,7 @@ export async function downloadSendImage(value: string): Promise<ToolImage> {
   }
 }
 
-export type SendImageStatus = "confirmed" | "unknown" | "failed";
+export type SendImageStatus = SendStatus;
 export interface SendImageResult {
   status: SendImageStatus;
   imageCount: number;
@@ -115,6 +116,7 @@ export interface SendImageResult {
   reused: boolean;
   reason?: string;
   detail: string;
+  destination?: string;
 }
 export interface SendImageDeps {
   db: Database;
@@ -122,6 +124,8 @@ export interface SendImageDeps {
   accountId: string;
   ownerIds: string[];
   waitTimeoutMs?: number;
+  crossPlatform?: CrossPlatformDelivery;
+  familyRoomFor?: (source: MessageRecord) => string | undefined;
   downloadImage?: typeof downloadSendImage;
 }
 
@@ -142,6 +146,7 @@ export class SendImageService {
           image_urls: { type: "array", items: { type: "string", maxLength: 8192 }, maxItems: MAX_IMAGES,
             description: "公开 HTTPS 的 png/jpeg/webp/gif 直链，每张不超过 4MB" },
           text: { type: "string", minLength: 1, maxLength: 1000, description: "可选；与图片同一条消息发送的文字" },
+          ...(this.deps.crossPlatform ? { destination: { type: "string", description: "主人本条原话明确要求跨端发送时，填写已绑定的目的地别名。" } } : {}),
         },
         additionalProperties: false,
       },
@@ -160,9 +165,16 @@ export class SendImageService {
 
   async createAndSend(args: Record<string, unknown>, message: MessageRecord, store: ReplyImageStore): Promise<SendImageResult> {
     if (!this.allowed(message)) return failure("forbidden", "只允许由当前账号主人的有效实时消息发送图片");
-    if (Object.keys(args).some(key => !["image_ids", "image_urls", "text"].includes(key))) {
+    const allowed = ["image_ids", "image_urls", "text", ...(this.deps.crossPlatform ? ["destination"] : [])];
+    if (Object.keys(args).some(key => !allowed.includes(key))) {
       return failure("invalid_input", "send_image 只接受 image_ids、image_urls 和 text");
     }
+    if (args.destination !== undefined && typeof args.destination !== "string") {
+      return failure("invalid_input", "跨端目的地必须是已绑定的别名");
+    }
+    let route: CrossPlatformDestination | undefined;
+    try { route = this.deps.crossPlatform?.authorize(message, args.destination, "image"); }
+    catch { return failure("forbidden", "本条原始消息没有授权向这个目的地发送图片"); }
     const ids = args.image_ids ?? [];
     const urls = args.image_urls ?? [];
     if (!Array.isArray(ids) || ids.some(id => typeof id !== "string")
@@ -182,7 +194,8 @@ export class SendImageService {
     catch { return failure("invalid_url", "图片 URL 只允许公开 HTTPS 地址"); }
     const conversationType = message.groupId ? "group" : "private";
     const targetId = message.groupId ?? message.senderId;
-    if (!/^[1-9]\d*$/.test(targetId)
+    const validTarget = message.providerId === "telegram" ? /^-?[1-9]\d*(?::[1-9]\d*)?$/u : /^[1-9]\d*$/u;
+    if (!validTarget.test(targetId)
       || message.conversationId !== (message.groupId ? `group_${message.groupId}` : `private_${message.senderId}`)) {
       return failure("invalid_conversation", "图片请求的真实会话无效");
     }
@@ -195,15 +208,29 @@ export class SendImageService {
     let downloaded: ToolImage[];
     try { downloaded = await Promise.all(normalizedUrls.map(url => (this.deps.downloadImage ?? downloadSendImage)(url))); }
     catch { return failure("image_unavailable", "图片 URL 下载失败、超时或地址、格式、大小不符合要求；本次未入队发送", imageCount); }
+    const images = [...selected.map(entry => entry.image!), ...downloaded];
+    if (route) {
+      const extensions: Record<ToolImage["mimeType"], string> = {
+        "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif",
+      };
+      const files = images.map((image, i) => ({ filename: `image-${i + 1}.${extensions[image.mimeType]}`,
+        bytes: Buffer.from(image.data, "base64") }));
+      const receipt = await this.deps.crossPlatform!.enqueue(message, route, {
+        kind: "image", files, caption: typeof args.text === "string" ? args.text : undefined,
+      }, { waitTimeoutMs: this.deps.waitTimeoutMs ?? 21500 });
+      return { ...receipt, imageCount };
+    }
     const segments: MessageSegment[] = [];
     if (typeof args.text === "string") segments.push({ type: "text", data: { text: args.text } });
-    for (const image of [...selected.map(entry => entry.image!), ...downloaded]) {
+    for (const image of images) {
       segments.push({ type: "image", data: { file: `base64://${image.data}` } });
     }
     let task: { id: number; reused: boolean };
     try {
+      const room = this.deps.familyRoomFor?.(message);
       task = this.deps.gateway.enqueueSend({ taskKey, kind: "tool_image", conversationType, targetId,
-        payload: { kind: "segments", requesterId: message.senderId, accountId: message.accountId, segments } });
+        payload: { kind: "segments", requesterId: message.senderId, accountId: message.accountId, segments,
+          ...(room ? { familyRoomId: room, familySourceEventKey: message.eventKey } : {}) } });
     } catch { return failure("enqueue_failed", "图片未能进入发送队列", imageCount); }
     return this.waitForTask(task.id, imageCount, task.reused);
   }

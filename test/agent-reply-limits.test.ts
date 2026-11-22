@@ -484,3 +484,14 @@ test("环境答复为纯标点时不发送，后续冷却正常恢复", async t 
   assert.equal(f.calls.length, 2);
   assert.equal(f.sent.length, 1);
 });
+
+test("群接话限制：开启 owner_bypass_limits 后主人连续发言不受环境冷却，群友仍受约束", async t => {
+  for (const bypass of [false, true]) {
+    const f = fixture(t);
+    f.cfg.groups.ownerBypassLimits = bypass;
+    await f.run(f.message("今天的电影节奏怎么样", { senderId: OWNER }));
+    await f.run(f.message("那火车票呢", { senderId: OWNER }));
+    await f.run(f.message("键盘声音大吗"));
+    assert.equal(f.calls.length, bypass ? 2 : 1, bypass ? "主人第二句越过冷却，群友仍被冷却" : "未开启时主人同样受冷却");
+  }
+});

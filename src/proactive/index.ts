@@ -253,7 +253,7 @@ export class ProactiveEngine {
     const conversation = target.type === 'private' ? `private_${owner}` : `group_${target.id}`;
     const bot = this.deps.gateway.getProvider().health().selfId;
     const cutoff = this.now() - 7 * 24 * 3600_000;
-    const rows = this.deps.db.recentMessages(conversation, 60, new Date(this.now()).toISOString())
+    const rows = this.deps.db.recentMessages(conversation, 60, new Date(this.now()).toISOString(), account)
       .filter(row => row.account_id === account && row.status === 'active' && Date.parse(row.sent_at) >= cutoff
         && (target.type === 'private' ? row.group_id === null : row.group_id === target.id))
       .filter(row => row.sender_id === owner || (row.sender_id === bot && (target.type === 'private'

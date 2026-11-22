@@ -1,13 +1,26 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
 import type { McpServerConfig } from "../config.js";
 import type { ToolDef, ToolParamSchema, ToolContext, ToolImage } from "../types.js";
 import { logger } from "../util/logger.js";
+import { openManagedMcpResponse } from "../mcp-admin/remote.js";
+import { readBounded } from "./web-http.js";
+import { noteDialogResult } from "../agent/dialog-confirm.js";
 
 const log = logger("mcp");
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_MCP_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_MCP_IMAGES = 4;
 const MCP_IMAGE_MIME_TYPES = new Set<string>(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+const MAX_MANAGED_RPC_BYTES = 24 * 1024 * 1024;
+
+export interface ManagedMcpRunConfig extends McpServerConfig {
+  isolatedStdio?: { directory: string; env: Record<string, string> };
+  secureRemote?: boolean;
+  credentials?: string[];
+  protocolVersion?: "2025-11-25";
+}
+type McpScope = (context: ToolContext) => boolean;
 
 function isMcpImageMime(value: unknown): value is ToolImage["mimeType"] {
   return typeof value === "string" && MCP_IMAGE_MIME_TYPES.has(value);
@@ -45,6 +58,7 @@ abstract class McpConnection {
   serverInfo = "";
   connected = false;
   error?: string;
+  protected sanitizedConfig?: ManagedMcpRunConfig;
 
   canRequest(): boolean { return this.connected; }
 
@@ -66,7 +80,7 @@ abstract class McpConnection {
 
   protected initializationParams(): Record<string, unknown> {
     return {
-      protocolVersion: PROTOCOL_VERSION,
+      protocolVersion: this.sanitizedConfig?.protocolVersion ?? PROTOCOL_VERSION,
       capabilities: {},
       clientInfo: { name: "qq-group-bot", version: "0.1.0" },
     };
@@ -77,10 +91,11 @@ abstract class McpConnection {
     const negotiated = resp.result?.protocolVersion;
     if (typeof negotiated === "string") this.protocolVersion = negotiated;
     const info = resp.result?.serverInfo as { name?: string; version?: string } | undefined;
-    this.serverInfo = info ? `${info.name ?? "?"} ${info.version ?? ""}` : "?";
+    const serverInfo = info ? `${info.name ?? "?"} ${info.version ?? ""}` : "?";
+    this.serverInfo = this.sanitizedConfig ? safeMcpError(serverInfo, this.sanitizedConfig) : serverInfo;
   }
 
-  async listTools(timeoutMs: number): Promise<McpTool[]> {
+  async listTools(timeoutMs: number, maxTools = Infinity): Promise<McpTool[]> {
     const tools: McpTool[] = [];
     const cursors = new Set<string>();
     let cursor: string | undefined;
@@ -92,6 +107,7 @@ abstract class McpConnection {
       for (const tool of page) {
         if (!tool || typeof tool.name !== "string" || !tool.name) throw new Error("tools/list 包含无效工具名称");
         tools.push(tool as McpTool);
+        if (tools.length > maxTools) throw new Error("MCP 工具数量超过上限");
       }
       const next = resp.result?.nextCursor;
       cursor = typeof next === "string" && next ? next : undefined;
@@ -138,10 +154,11 @@ abstract class McpConnection {
   abstract close(): Promise<void>;
 }
 
-function spawnStdio(cfg: McpServerConfig): ChildProcess {
+function spawnStdio(cfg: ManagedMcpRunConfig): ChildProcess {
   const options = {
     stdio: ["pipe", "pipe", "pipe"] as ["pipe", "pipe", "pipe"],
-    env: { ...process.env, ...(cfg.env ?? {}) },
+    env: { ...(cfg.isolatedStdio?.env ?? process.env), ...(cfg.env ?? {}) },
+    cwd: cfg.isolatedStdio?.directory,
   };
   // Windows 的 npx/npm/pnpm/yarn 是 .cmd 包装；直接 spawn 会 ENOENT/EINVAL。
   if (process.platform === "win32" && /^(?:npx|npm|pnpm|yarn)$/i.test(cfg.command!)) {
@@ -153,15 +170,23 @@ function spawnStdio(cfg: McpServerConfig): ChildProcess {
 class StdioMcpConnection extends McpConnection {
   private child: ChildProcess;
   private buffer = "";
+  private failure?: Error;
   private waiters = new Map<number, { resolve: (r: JsonRpcResp) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
 
-  constructor(private cfg: McpServerConfig, private rootLog = log) {
+  constructor(private cfg: ManagedMcpRunConfig, private rootLog = log) {
     super();
+    this.sanitizedConfig = cfg;
     if (!cfg.command) throw new Error(`MCP 服务器 ${cfg.name} 缺少 command`);
     this.child = spawnStdio(cfg);
     this.child.stdout!.setEncoding("utf-8");
     this.child.stdout!.on("data", (chunk: string) => {
       this.buffer += chunk;
+      if (cfg.isolatedStdio && this.buffer.length > MAX_MANAGED_RPC_BYTES) {
+        this.failPending(new Error("托管 MCP 返回数据超过上限"));
+        this.buffer = "";
+        this.child.kill();
+        return;
+      }
       let idx: number;
       while ((idx = this.buffer.indexOf("\n")) >= 0) {
         const line = this.buffer.slice(0, idx).trim();
@@ -184,17 +209,24 @@ class StdioMcpConnection extends McpConnection {
     this.child.stderr!.on("data", (chunk: string) => {
       this.rootLog.debug(`MCP ${cfg.name} stderr（${Buffer.byteLength(String(chunk))} 字节）`);
     });
-    this.child.on("exit", (code) => {
-      this.connected = false;
-      for (const [, w] of this.waiters) {
-        clearTimeout(w.timer);
-        w.reject(new Error(`MCP ${cfg.name} 进程退出 code=${code}`));
-      }
-      this.waiters.clear();
-    });
+    this.child.on("error", () => this.failPending(new Error(`MCP ${cfg.name} 进程未能启动`)));
+    this.child.stdin?.on("error", () => this.failPending(new Error(`MCP ${cfg.name} 输入通道已关闭`)));
+    this.child.on("exit", (code) => this.failPending(new Error(`MCP ${cfg.name} 进程退出 code=${code}`)));
+  }
+
+  private failPending(error: Error): void {
+    this.connected = false;
+    this.failure = error;
+    this.error = error.message;
+    for (const waiter of this.waiters.values()) {
+      clearTimeout(waiter.timer);
+      waiter.reject(error);
+    }
+    this.waiters.clear();
   }
 
   protected async send(body: object): Promise<void> {
+    if (this.failure) throw this.failure;
     if (!this.child.stdin || this.child.killed) throw new Error(`MCP ${this.cfg.name} 进程不可用`);
     this.child.stdin.write(JSON.stringify(body) + "\n");
   }
@@ -302,8 +334,12 @@ function responseFor(value: unknown, id: number): value is JsonRpcResp {
     ("result" in value || "error" in value);
 }
 
-function safeMcpError(error: unknown, cfg: McpServerConfig): string {
-  let message = error instanceof Error ? error.message : String(error);
+function safeMcpError(error: unknown, cfg: ManagedMcpRunConfig): string {
+  return redactMcpCredentials(error instanceof Error ? error.message : String(error), cfg).slice(0, 300);
+}
+
+function redactMcpCredentials(value: string, cfg: ManagedMcpRunConfig): string {
+  let message = value;
   if (cfg.url) {
     message = message.replaceAll(cfg.url, "[MCP endpoint]");
     try {
@@ -312,12 +348,12 @@ function safeMcpError(error: unknown, cfg: McpServerConfig): string {
       }
     } catch { /* invalid URLs are reported without exposing them */ }
   }
-  for (const value of Object.values(cfg.headers ?? {})) {
+  for (const value of [...Object.values(cfg.headers ?? {}), ...cfg.credentials ?? []]) {
     if (value) message = message.replaceAll(value, "[redacted]");
     const credential = value.match(/^(?:Bearer|Basic)\s+(.+)$/i)?.[1];
     if (credential) message = message.replaceAll(credential, "[redacted]");
   }
-  return message.slice(0, 300);
+  return message;
 }
 
 class SessionExpiredError extends Error {
@@ -383,8 +419,10 @@ class HttpMcpConnection extends McpConnection {
   private closed = false;
   private initializedOnce = false;
   private renewal?: Promise<void>;
-  constructor(private cfg: McpServerConfig) {
+  constructor(private cfg: ManagedMcpRunConfig) {
     super();
+    this.sanitizedConfig = cfg;
+    this.protocolVersion = cfg.protocolVersion ?? PROTOCOL_VERSION;
     if (!cfg.url) throw new Error(`MCP 服务器 ${cfg.name} 缺少 url`);
     this.url = cfg.url;
   }
@@ -461,17 +499,23 @@ class HttpMcpConnection extends McpConnection {
     const sentSession = body.method === "initialize" ? undefined : this.sessionId;
     const headers = this.headers();
     if (body.method === "initialize") delete headers["mcp-session-id"];
-    const response = await fetch(this.url, { method: "POST", headers, body: JSON.stringify(body), signal });
-    if (signal.aborted) { await response.body?.cancel(); throw new Error("MCP 请求已中止"); }
-    if (!response.ok) {
-      const text = await response.text();
-      if (response.status === 404 && sentSession && explicitSessionMissing(text)) throw new SessionExpiredError(sentSession);
-      throw new McpHttpError(response.status, `MCP HTTP ${response.status}: ${text.slice(0, 150)}`);
+    const init = { method: "POST", headers, body: JSON.stringify(body), signal };
+    const managed = this.cfg.secureRemote ? await openManagedMcpResponse(this.url, init) : undefined;
+    const response = managed?.response ?? await fetch(this.url, init);
+    try {
+      if (signal.aborted) { await response.body?.cancel(); throw new Error("MCP 请求已中止"); }
+      if (!response.ok) {
+        const text = managed ? new TextDecoder().decode((await readBounded(response, 4096)).bytes) : await response.text();
+        if (response.status === 404 && sentSession && explicitSessionMissing(text)) throw new SessionExpiredError(sentSession);
+        throw new McpHttpError(response.status, managed ? `MCP HTTP ${response.status}` : `MCP HTTP ${response.status}: ${text.slice(0, 150)}`);
+      }
+      const assignedSession = response.headers.get("mcp-session-id");
+      if (body.method === "initialize" && assignedSession) this.sessionId = assignedSession;
+      if (body.id === undefined) { await response.body?.cancel(); return; }
+      return await this.readResponse(response, body.id);
+    } finally {
+      await managed?.close();
     }
-    const assignedSession = response.headers.get("mcp-session-id");
-    if (body.method === "initialize" && assignedSession) this.sessionId = assignedSession;
-    if (body.id === undefined) { await response.body?.cancel(); return; }
-    return this.readResponse(response, body.id);
   }
 
   private async renew(signal: AbortSignal, deadline: number, expiredSession?: string): Promise<void> {
@@ -480,7 +524,7 @@ class HttpMcpConnection extends McpConnection {
     if (!this.renewal) {
       this.connected = false;
       this.sessionId = undefined;
-      this.protocolVersion = PROTOCOL_VERSION;
+      this.protocolVersion = this.cfg.protocolVersion ?? PROTOCOL_VERSION;
       const controller = new AbortController();
       this.active.add(controller);
       const remaining = Math.max(1, deadline - Date.now());
@@ -522,7 +566,9 @@ class HttpMcpConnection extends McpConnection {
       });
       if (result) return result;
     } else {
-      const text = await response.text();
+      const managed = this.cfg.secureRemote ? await readBounded(response, MAX_MANAGED_RPC_BYTES) : undefined;
+      if (managed?.truncated) throw new Error("托管 MCP 返回数据超过上限");
+      const text = managed ? new TextDecoder().decode(managed.bytes) : await response.text();
       if (text.trim()) {
         const value: unknown = JSON.parse(text);
         if (responseFor(value, id)) return value;
@@ -549,7 +595,8 @@ export interface McpServerStatus {
 
 export class McpManager {
   private connections = new Map<string, McpConnection>();
-  private tools: ToolDef[] = [];
+  private tools = new Map<string, ToolDef[]>();
+  private managed = new Map<string, McpScope>();
   private errors = new Map<string, string>();
 
   constructor(
@@ -565,7 +612,7 @@ export class McpManager {
         transport: s.transport,
         connected: conn?.connected ?? false,
         error: this.errors.get(s.name) ?? conn?.error,
-        tools: conn ? this.tools.filter((t) => t.name.startsWith(`mcp__${s.name}__`)).length : 0,
+        tools: conn ? this.tools.get(s.name)?.length ?? 0 : 0,
         serverInfo: conn?.serverInfo,
       };
     });
@@ -574,45 +621,10 @@ export class McpManager {
   async start(): Promise<void> {
     if (!this.cfg.enabled) return;
     for (const s of this.cfg.servers) {
-      let conn: McpConnection | undefined;
       try {
-        conn = s.transport === "stdio" ? new StdioMcpConnection(s) : new HttpMcpConnection(s);
-        await conn.initialize(this.cfg.connectTimeoutMs);
-        const mcpTools = await conn.listTools(this.cfg.connectTimeoutMs);
-        this.connections.set(s.name, conn);
+        await this.connect(s);
         this.errors.delete(s.name);
-        const denied = (this.cfg.denyTools ?? []).map((d) => d.toLowerCase());
-        for (const t of mcpTools) {
-          if (s.allowTools !== undefined && !s.allowTools.includes(t.name)) continue;
-          const fullName = `mcp__${s.name}__${t.name}`.toLowerCase();
-          if (denied.some((d) => fullName.includes(d))) {
-            log.info(`MCP 工具被 deny_tools 排除: ${s.name}/${t.name}`);
-            continue;
-          }
-          const def: ToolDef = {
-            name: `mcp__${s.name}__${t.name}`,
-            description: `[MCP:${s.name}] ${s.name === 'cn-scraper' && t.name === 'dianping_search'
-              ? '搜索大众点评商户。city是真正的城市筛选，长沙/长沙市=344、上海/上海市=1，也接受有效数字城市ID。查某城市必须显式传city；不传默认上海，未知城市名称明确报错。keyword为店名、菜品或关键词，limit为数量。仅返回商户名、ID和链接，不能据此声称已核实评分、包厢或其他未返回信息。'
-              : t.description ?? t.name}`,
-            inputSchema: t.inputSchema ?? { type: "object" },
-            execute: async (args: Record<string, unknown>, ctx: ToolContext) => {
-              if (this.toolAllowed(def) === false) throw new Error("该工具当前不可用");
-              const c = this.connections.get(s.name);
-              if (!c || !c.canRequest()) throw new Error(`MCP 服务器 ${s.name} 未连接`);
-              const output = await c.callTool(t.name, args, this.cfg.callTimeoutMs);
-              if (s.name === "cn-scraper" && cnScraperFailure(output.text)) {
-                // A website failure is not a broken MCP connection and must never trigger replay.
-                throw new Error(`cn-scraper 网站工具失败: ${safeMcpError(output.text, s)}`);
-              }
-              if (output.images.length) ctx.onImages?.(output.images);
-              return output.text;
-            },
-          };
-          if (this.toolAllowed(def)) this.tools.push(def);
-        }
-        log.info(`MCP ${s.name}: ${mcpTools.length} 个工具`);
       } catch (e) {
-        await conn?.close();
         const message = safeMcpError(e, s);
         this.errors.set(s.name, message);
         log.warn(`MCP ${s.name} 连接失败:`, message);
@@ -620,14 +632,109 @@ export class McpManager {
     }
   }
 
-  getTools(): ToolDef[] {
-    return this.tools;
+  hasStaticServer(name: string): boolean { return this.cfg.servers.some(server => server.name === name); }
+
+  async upsertManaged(server: ManagedMcpRunConfig, scope: McpScope): Promise<void> {
+    if (!this.cfg.enabled) throw new Error("MCP 当前未启用");
+    if (this.hasStaticServer(server.name)) throw new Error("服务名与已有 MCP 配置重复");
+    // Keep the old connection available until the replacement handshake and tool listing succeed.
+    await this.connect(server, scope);
+  }
+
+  async removeManaged(name: string): Promise<void> {
+    if (!this.managed.delete(name)) return;
+    const connection = this.connections.get(name);
+    this.connections.delete(name);
+    this.tools.delete(name);
+    await connection?.close();
+  }
+
+  managedStatus(name: string): { connected: boolean; tools: number } {
+    const conn = this.managed.has(name) ? this.connections.get(name) : undefined;
+    return { connected: conn?.connected ?? false, tools: conn ? this.tools.get(name)?.length ?? 0 : 0 };
+  }
+
+  private async connect(server: ManagedMcpRunConfig, scope?: McpScope): Promise<void> {
+    const connection = server.transport === "stdio" ? new StdioMcpConnection(server) : new HttpMcpConnection(server);
+    let definitions: ToolDef[];
+    try {
+      await connection.initialize(this.cfg.connectTimeoutMs);
+      const discovered = await connection.listTools(this.cfg.connectTimeoutMs, scope ? 500 : Infinity);
+      definitions = this.buildTools(server, connection, discovered, scope);
+      log.info(`MCP ${server.name}: ${discovered.length} 个工具`);
+    } catch (error) {
+      await connection.close();
+      throw new Error(safeMcpError(error, server));
+    }
+    const previous = this.connections.get(server.name);
+    if (scope) this.managed.set(server.name, scope);
+    this.connections.set(server.name, connection);
+    this.tools.set(server.name, definitions);
+    await previous?.close();
+  }
+
+  private buildTools(server: ManagedMcpRunConfig, connection: McpConnection, tools: McpTool[], scope?: McpScope): ToolDef[] {
+    const definitions: ToolDef[] = [];
+    const denied = (this.cfg.denyTools ?? []).map(d => d.toLowerCase());
+    for (const tool of tools) {
+      if (server.allowTools !== undefined && !server.allowTools.includes(tool.name)) continue;
+      const fullName = `mcp__${server.name}__${tool.name}`;
+      if (denied.some(d => fullName.toLowerCase().includes(d))) continue;
+      const usableName = /^[a-zA-Z0-9_-]{1,64}$/.test(fullName) && (!scope || redactMcpCredentials(fullName, server) === fullName);
+      const name = !scope || usableName ? fullName : `mcp__${server.name}__${createHash("sha256").update(tool.name).digest("hex").slice(0, 16)}`;
+      const description = server.name === "cn-scraper" && tool.name === "dianping_search"
+        ? "搜索大众点评商户。city是真正的城市筛选，长沙/长沙市=344、上海/上海市=1，也接受有效数字城市ID。查某城市必须显式传city；不传默认上海，未知城市名称明确报错。keyword为店名、菜品或关键词，limit为数量。仅返回商户名、ID和链接，不能据此声称已核实评分、包厢或其他未返回信息。"
+        : tool.description ?? tool.name;
+      const definition: ToolDef = {
+        name,
+        description: `[MCP:${server.name}] ${scope ? redactMcpCredentials(description, server) : description}`,
+        inputSchema: scope ? cleanManagedSchema(tool.inputSchema, server) : tool.inputSchema ?? { type: "object" },
+        private: scope ? true : undefined,
+        execute: async (args, context) => {
+          if (!this.toolAllowed(definition) || (scope && !scope(context))) throw new Error("该工具当前不可用");
+          const current = this.connections.get(server.name);
+          if (!current || (scope && current !== connection) || !current.canRequest()) throw new Error(`MCP 服务器 ${server.name} 未连接`);
+          let output: Awaited<ReturnType<McpConnection["callTool"]>>;
+          try { output = await current.callTool(tool.name, args, this.cfg.callTimeoutMs); }
+          catch (error) { if (scope) throw new Error(safeMcpError(error, server)); throw error; }
+          if (server.name === "cn-scraper" && cnScraperFailure(output.text)) throw new Error(`cn-scraper 网站工具失败: ${safeMcpError(output.text, server)}`);
+          // Revocation may occur while a network request is in flight.
+          if (scope && (this.connections.get(server.name) !== connection || !scope(context))) throw new Error("该工具当前不可用");
+          if (server.name === "phone" && tool.name === "dialog") { try { noteDialogResult(context, args, output.text); } catch {} }
+          if (output.images.length) context.onImages?.(output.images);
+          return scope ? redactMcpCredentials(output.text, server) : output.text;
+        },
+      };
+      if (this.toolAllowed(definition)) definitions.push(definition);
+    }
+    return definitions;
+  }
+
+  getTools(context?: ToolContext): ToolDef[] {
+    return [...this.tools].flatMap(([name, tools]) => {
+      const scope = this.managed.get(name);
+      return !scope || (context && scope(context) && this.connections.get(name)?.canRequest()) ? tools : [];
+    });
   }
 
   async stop(): Promise<void> {
     for (const c of this.connections.values()) await c.close();
     this.connections.clear();
     this.errors.clear();
-    this.tools = [];
+    this.tools.clear();
+    this.managed.clear();
   }
+}
+
+function cleanManagedSchema(schema: ToolParamSchema | undefined, server: ManagedMcpRunConfig): ToolParamSchema {
+  const clean = (value: unknown, depth: number): unknown => {
+    if (depth > 24) throw new Error("MCP 工具参数结构过深");
+    if (typeof value === "string") return redactMcpCredentials(value, server);
+    if (Array.isArray(value)) return value.map(item => clean(item, depth + 1));
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [redactMcpCredentials(key, server), clean(item, depth + 1)]));
+    }
+    return value;
+  };
+  return clean(schema ?? { type: "object" }, 0) as ToolParamSchema;
 }

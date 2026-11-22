@@ -1,5 +1,5 @@
 # Discord 网关示例：只列出与 config.example.yaml 不同的部分，其余段落（model、search、tools 等）照抄 config.example.yaml。
-# 用法：node dist/index.js config.discord.yaml
+# 用法：npm start -- --config config.discord.yaml
 timezone: Asia/Shanghai
 persona:
   name: κόραξ

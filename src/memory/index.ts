@@ -33,7 +33,7 @@ export class SqliteMemory implements MemoryProvider {
   private finalizing = new Map<number, Promise<void>>();
 
   constructor(db: Database, cfg: AppConfig["memory"], llm: LLMClient | null, summaryModel?: string,
-    private readonly options: { selfId?: () => string | undefined } = {}) {
+    private readonly options: { selfId?: (accountId: string) => string | undefined } = {}) {
     this.db = db;
     this.cfg = cfg;
     this.llm = cfg.extraction === "llm" ? llm : null;
@@ -124,7 +124,7 @@ export class SqliteMemory implements MemoryProvider {
     const endIso = t.ended_at ?? new Date().toISOString();
     // 必须在第一次 await 前关闭，随后收到的消息会另开话题。
     this.db.closeTopic(topicId, endIso);
-    const msgs = this.db.messagesInRange(t.group_id, t.started_at, endIso);
+    const msgs = this.db.messagesInRange(t.group_id, t.started_at, endIso, t.account_id);
     const relevant = msgs.filter((m) => m.account_id === t.account_id && m.sent_at >= t.started_at && m.sent_at < endIso
       && m.status === "active" && !this.db.isUserBlocked(m.account_id, m.sender_id));
     if (relevant.length === 0) {
@@ -190,7 +190,7 @@ export class SqliteMemory implements MemoryProvider {
 
   private async extractFacts(t: DBRow_Topic, msgs: DBRow_Message[]): Promise<void> {
     if (this.cfg.extraction === "off" || !msgs.length || msgs.some(m => this.db.isUserBlocked(m.account_id, m.sender_id))) return;
-    const selfId = this.options.selfId?.();
+    const selfId = this.options.selfId?.(t.account_id);
     // 生产连接尚未确认自身账号时，摘要照常保存，暂不把未知机器人身份的发言提成事实。
     if (this.options.selfId && !selfId) return;
     const sources: DBRow_Message[] = [];
@@ -242,7 +242,7 @@ export class SqliteMemory implements MemoryProvider {
           log.warn("LLM 事实提取返回无效JSON，退回保守规则");
         } else {
           for (const raw of parsed) {
-            const candidate = validateMemoryCandidate(raw, sources, this.options.selfId?.() ?? selfId);
+            const candidate = validateMemoryCandidate(raw, sources, this.options.selfId?.(t.account_id) ?? selfId);
             if (candidate) candidates.push(candidate);
           }
         }
@@ -263,7 +263,7 @@ export class SqliteMemory implements MemoryProvider {
     for (const candidate of candidates) {
       if (msgs.some(m => this.db.isUserBlocked(m.account_id, m.sender_id))) return;
       if (inserted >= limit) break;
-      const currentSelfId = this.options.selfId?.() ?? selfId;
+      const currentSelfId = this.options.selfId?.(t.account_id) ?? selfId;
       if ((this.options.selfId && !currentSelfId) || candidate.source.sender_id === currentSelfId) continue;
       const currentSource = this.db.getMessageByEventKey(candidate.source.event_key);
       if (!currentSource || currentSource.status !== "active" || currentSource.account_id !== t.account_id

@@ -158,7 +158,7 @@ export class GroupReplyJudge {
     const saved = this.states.get(this.key(m.accountId, m.conversationId))?.context;
     if (saved?.eventKey === m.eventKey) return saved.text;
     const cutoff = this.now() - CONTEXT_AGE_MS;
-    const rows = this.db.recentMessages(m.conversationId, this.cfg.maxContextMessages * 4, m.sentAt)
+    const rows = this.db.recentMessages(m.conversationId, this.cfg.maxContextMessages * 4, m.sentAt, m.accountId)
       .filter(row => row.account_id === m.accountId && row.conversation_id === m.conversationId
         && row.group_id === m.groupId && row.origin === "live" && row.status === "active"
         && Date.parse(row.sent_at) >= cutoff && row.text_content.trim()

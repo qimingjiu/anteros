@@ -403,3 +403,14 @@ test("图片上下文：召唤恢复仍受本人、两分钟和话题切换边�
     assert.deepEqual(collectImageContext(f.db, current, [], { resumeRecentImage: true }), [], scenario);
   }
 });
+
+test("图片来源：回复无图消息问“这张图”时，仅在 recentOnReply 开启后取最近的图", t => {
+  const f = fixture(t);
+  const pic = f.message(picture("recent"), { sentAt: new Date(f.base - 30_000).toISOString() });
+  const text = (t: string) => ({ segments: [{ type: "text" as const, data: { text: t } }], textContent: t });
+  const plain = f.message(undefined, { ...text("前面一句没有图的话"), sentAt: new Date(f.base - 10_000).toISOString() });
+  f.db.insertMessage(pic); f.db.insertMessage(plain);
+  const ask = f.message(undefined, { ...text("这张图里是什么"), replyToMessageId: plain.messageId });
+  assert.deepEqual(collectImageContext(f.db, ask).map(image => image.url), []);
+  assert.deepEqual(collectImageContext(f.db, ask, [], { recentOnReply: true }).map(image => image.url), [picture("recent")]);
+});

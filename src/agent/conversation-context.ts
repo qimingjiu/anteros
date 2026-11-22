@@ -7,10 +7,11 @@ const faceIds = (record: MessageRecord): string[] => record.segments
   .flatMap(segment => segment.type === "face" ? [String(segment.data.id).slice(0, 40)] : []).slice(0, 10);
 
 /** 所有回复路径共用近期原文，补足 @、私聊与自动接话中的指代和追问。 */
-export function conversationContext(db: Database, message: MessageRecord, selfId: string | undefined, maxChars = 6000, includeQueuedBotReplies = false): string {
+export function conversationContext(db: Database, message: MessageRecord, selfId: string | undefined,
+  maxChars = 6000, includeQueuedBotReplies = false, showMemberAuthors = false): string {
   const budget = Math.floor(Math.max(512, Math.min(20_000, Number.isFinite(maxChars) ? maxChars : 6000)));
-  const pastRows = db.recentMessages(message.conversationId, 80, message.sentAt);
-  const newerBotRows = includeQueuedBotReplies && selfId ? db.recentMessages(message.conversationId, 20, new Date().toISOString())
+  const pastRows = db.recentMessages(message.conversationId, 80, message.sentAt, message.accountId);
+  const newerBotRows = includeQueuedBotReplies && selfId ? db.recentMessages(message.conversationId, 20, new Date().toISOString(), message.accountId)
     .filter(row => row.sender_id === selfId && row.sent_at > message.sentAt) : [];
   const rows = [...new Map([...pastRows,...newerBotRows].map(row=>[row.id,row])).values()]
     .sort((a,b)=>b.sent_at.localeCompare(a.sent_at)||b.id-a.id)
@@ -27,7 +28,8 @@ export function conversationContext(db: Database, message: MessageRecord, selfId
       messageId: record.messageId.slice(0, 100),
       at: record.sentAt,
       senderId: record.senderId.slice(0, 100),
-      name: record.senderId === selfId ? "（你自己）" : record.displayNameAtTime.slice(0, 100),
+      name: record.senderId === selfId && (!showMemberAuthors || !record.displayNameAtTime)
+        ? "（你自己）" : record.displayNameAtTime.slice(0, 100),
       mentions: record.segments.filter(s => s.type === "at").map(s => String(s.data.qq)).slice(0, 10),
       replyTo: record.replyToMessageId,
       imageCount: messageImageUrls(record).length,

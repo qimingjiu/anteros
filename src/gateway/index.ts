@@ -18,8 +18,9 @@ export type { GatewayEvent, MessageRecord, MessageSegment } from "../types.js";
 
 export type SendPayload =
   | { kind: "segments"; segments: MessageSegment[]; expiresAt?: string; requesterId?: string; accountId?: string;
-      replyKind?: "observation" | "owner_mention" | "direct"; replyBatch?: string }
-  | { kind: "file"; filePath: string; fileName: string }
+      replyKind?: "observation" | "owner_mention" | "direct"; replyBatch?: string; senderName?: string;
+      familyRoomId?: string; familySourceEventKey?: string }
+  | { kind: "file"; filePath: string; fileName: string; requesterId?: string; accountId?: string }
   | { kind: "poke"; userId: string; requesterId: string; accountId: string; expiresAt: string; sourceEventKey: string };
 
 export interface GatewayStats {
@@ -38,14 +39,16 @@ export interface GatewayOptions {
   backfillMaxPages: number;
   backfillPageLimit: number;
   pokeOwnerIds?: string[];
+  legacyAnchorKey?: boolean;
 }
 
-export function gatewayOptionsFromConfig(cfg: Pick<AppConfig, "gateway" | "tools" | "admins">): GatewayOptions {
+export function gatewayOptionsFromConfig(cfg: Pick<AppConfig, "gateway" | "tools" | "admins">, primary = true): GatewayOptions {
   return {
     accountId: cfg.gateway.accountId,
     backfillMaxPages: cfg.gateway.onebot.backfillMaxPages,
     backfillPageLimit: cfg.gateway.onebot.backfillPageLimit,
     pokeOwnerIds: cfg.tools.ownerIds ?? cfg.admins,
+    ...(primary ? {} : { legacyAnchorKey: false }),
   };
 }
 
@@ -54,6 +57,7 @@ export class Gateway {
   private provider: Provider;
   /** 会话静默（主人说闭嘴）期间拦截一切待发消息，含定时/报告/进度。 */
   private sendHold?: (conversationType: "group" | "private", targetId: string) => boolean;
+  private familyRecorder?: (record: MessageRecord, room: string, sourceEventKey?: string) => void;
   private accountId: string;
   private subscribers: ((ev: GatewayEvent) => void)[] = [];
   private queueRunning = false;
@@ -70,7 +74,9 @@ export class Gateway {
   private backfillEnabled: boolean;
   private backfillMaxPages: number;
   private backfillPageLimit: number;
+  private readonly anchorKey: string;
   private stopped = false;
+  private sendLoop?: Promise<void>;
   private pokeOwnerIds: Set<string>;
 
   constructor(db: Database, provider: Provider, opts: GatewayOptions) {
@@ -80,12 +86,14 @@ export class Gateway {
     this.backfillEnabled = opts.backfillMaxPages > 0;
     this.backfillMaxPages = opts.backfillMaxPages;
     this.backfillPageLimit = opts.backfillPageLimit;
+    this.anchorKey = opts.legacyAnchorKey === false ? `backfill_anchors:${opts.accountId}` : "backfill_anchors";
     this.pokeOwnerIds = new Set(opts.pokeOwnerIds ?? []);
   }
 
   start(): void {
     // 启动恢复：文件、报告、主动消息与反戳标 unknown，避免结果不明时重复投递。
-    const r = this.db.resetInFlightTasks();
+    this.db.assignLegacySendTasks(this.accountId);
+    const r = this.db.resetInFlightTasks(this.accountId);
     if (r.requeued || r.unknowned) log.info(`启动恢复: 重新排队 ${r.requeued} 个任务，${r.unknowned} 个标记为结果不明`);
 
     this.provider.onEvent((ev) => {
@@ -96,12 +104,14 @@ export class Gateway {
       }
     });
     this.provider.start();
-    void this.runSendQueue();
+    this.sendLoop = this.runSendQueue();
   }
 
   async stop(): Promise<void> {
     this.stopped = true;
     await this.provider.stop();
+    await this.sendLoop;
+    await Promise.all(this.perTargetChains.values());
   }
 
   onEvent(cb: (ev: GatewayEvent) => void): void {
@@ -110,6 +120,10 @@ export class Gateway {
 
   getProvider(): Provider {
     return this.provider;
+  }
+
+  getAccountId(): string {
+    return this.accountId;
   }
 
   getStats(): GatewayStats {
@@ -156,9 +170,9 @@ export class Gateway {
   }
 
   private handleMessage(m: MessageRecord): void {
+    if (m.accountId !== this.accountId || m.providerId !== this.provider.providerId) return;
     this.stats.receivedTotal++;
     this.stats.lastEventAt = m.receivedAt;
-    this.accountId = m.accountId;
 
     if (!this.shouldStoreMessage(m)) return;
 
@@ -175,6 +189,7 @@ export class Gateway {
   }
 
   private handleRecall(ev: Extract<GatewayEvent, { kind: "recall" }>): void {
+    if (ev.accountId !== this.accountId) return;
     const changed = this.db.markRecalled(ev.conversationId, ev.messageId, ev.accountId);
     if (changed) {
       this.stats.recalled++;
@@ -217,6 +232,9 @@ export class Gateway {
   // ---------- 发送侧 ----------
 
   setSendHold(fn: (conversationType: "group" | "private", targetId: string) => boolean): void { this.sendHold = fn; }
+  setFamilyRecorder(fn: (record: MessageRecord, room: string, sourceEventKey?: string) => void): void {
+    this.familyRecorder = fn;
+  }
 
   /** 排队发送（幂等：taskKey 相同不会重复入队） */
   enqueueSend(t: {
@@ -227,7 +245,7 @@ export class Gateway {
     payload: SendPayload;
   }): { id: number; reused: boolean } {
     if (t.payload.kind === "poke") t = { ...t, taskKey: `poke:${t.payload.sourceEventKey}` };
-    return this.db.enqueueSendTask({ ...t, payload: t.payload });
+    return this.db.enqueueSendTask({ ...t, accountId: this.accountId });
   }
 
   private async runSendQueue(): Promise<void> {
@@ -235,7 +253,7 @@ export class Gateway {
     const dispatched = new Set<number>();
     while (!this.stopped) {
       try {
-        const tasks = this.db.pendingSendTasks(20);
+        const tasks = this.db.pendingSendTasks(20, this.accountId);
         if (tasks.length === 0) {
           await sleep(500);
           continue;
@@ -249,6 +267,7 @@ export class Gateway {
           const next = prev
             .then(() => {
               dispatched.delete(t.id);
+              if (this.stopped) return;
               return this.executeSendTask(t.id);
             })
             .catch((e) => log.error("发送任务异常", e));
@@ -314,7 +333,7 @@ export class Gateway {
       return;
     }
     this.db.bumpSendTaskAttempt(taskId);
-    if ((payload.kind === "segments" || payload.kind === "poke") && payload.requesterId && this.db.isUserBlocked(payload.accountId ?? this.accountId, payload.requesterId)) {
+    if (payload.requesterId && this.db.isUserBlocked(payload.accountId ?? this.accountId, payload.requesterId)) {
       this.db.finishSendTask(taskId, "failed", "发送者已被静默屏蔽，取消待发回复");
       return;
     }
@@ -349,7 +368,7 @@ export class Gateway {
     this.db.finishSendTask(taskId, result.status, result.error, result.messageId);
     // 已确认发送的文本消息回写消息库：下一轮对话的上下文里要能看到"自己说过什么"
     if (result.status === "confirmed" && result.messageId && payload.kind === "segments") {
-      this.recordOutgoingMessage(t, payload.segments, result.messageId);
+      this.recordOutgoingMessage(t, payload, result.messageId);
     }
     if (result.status === "confirmed") this.stats.sentConfirmed++;
     else if (result.status === "failed") this.stats.sentFailed++;
@@ -366,12 +385,13 @@ export class Gateway {
     }
   }
 
-  private recordOutgoingMessage(t: { conversation_type: "group" | "private"; target_id: string; kind: string }, segments: MessageSegment[], messageId: string): void {
+  private recordOutgoingMessage(t: { conversation_type: "group" | "private"; target_id: string; kind: string },
+    payload: Extract<SendPayload, { kind: "segments" }>, messageId: string): void {
     try {
       const groupId = t.conversation_type === "group" ? t.target_id : undefined;
       const conversationId = groupId ? `group_${groupId}` : `private_${t.target_id}`;
       const selfId = this.provider.health().selfId ?? "self";
-      this.db.insertMessage({
+      const record: MessageRecord = {
         eventKey: `${this.accountId}:${conversationId}:message:${messageId}`,
         accountId: this.accountId,
         providerId: this.provider.providerId,
@@ -379,14 +399,16 @@ export class Gateway {
         groupId,
         messageId,
         senderId: selfId,
-        displayNameAtTime: "（你自己）",
+        displayNameAtTime: payload.senderName || "（你自己）",
         sentAt: new Date().toISOString(),
         receivedAt: new Date().toISOString(),
-        segments,
-        textContent: segmentsText(segments),
+        segments: payload.segments,
+        textContent: segmentsText(payload.segments),
         status: "active",
         origin: "live",
-      });
+      };
+      if (payload.familyRoomId) this.familyRecorder?.(record, payload.familyRoomId, payload.familySourceEventKey);
+      this.db.insertMessage(record);
     } catch (e) {
       log.debug("回写已发送消息失败（不影响发送）:", (e as Error).message);
     }
@@ -410,7 +432,7 @@ export class Gateway {
 
   private enabledGroupsWithAnchor(): string[] {
     const out: string[] = [];
-    const raw = this.db.kvGet("backfill_anchors");
+    const raw = this.db.kvGet(this.anchorKey);
     if (raw) {
       try {
         const obj = JSON.parse(raw) as Record<string, string>;
@@ -421,14 +443,14 @@ export class Gateway {
   }
 
   updateAnchor(groupId: string, messageId: string): void {
-    const raw = this.db.kvGet("backfill_anchors");
+    const raw = this.db.kvGet(this.anchorKey);
     const obj: Record<string, string> = raw ? (JSON.parse(raw) as Record<string, string>) : {};
     obj[`group_${groupId}`] = messageId;
-    this.db.kvSet("backfill_anchors", JSON.stringify(obj));
+    this.db.kvSet(this.anchorKey, JSON.stringify(obj));
   }
 
   private async backfillGroup(groupId: string): Promise<void> {
-    const raw = this.db.kvGet("backfill_anchors");
+    const raw = this.db.kvGet(this.anchorKey);
     const anchors: Record<string, string> = raw ? (JSON.parse(raw) as Record<string, string>) : {};
     const anchor = anchors[`group_${groupId}`];
     if (!anchor) return;

@@ -12,6 +12,8 @@ import { logger } from "../util/logger.js";
 import type { PhoneContextProvider } from "../presence/index.js";
 import type { RuntimeDiagnosticsProvider } from "../diagnostics/index.js";
 import { ApiV2 } from "./api2.js";
+import { serveFamilyPanel } from "../family/panel.js";
+import { serveFamilySignals } from "../family/signals.js";
 
 const log = logger("web");
 
@@ -28,6 +30,10 @@ export interface WebDeps {
   diagnostics?: RuntimeDiagnosticsProvider | null;
   notion?: {status(): Record<string, unknown>} | null;
   notionReminders?: {status(): Record<string, unknown>} | null;
+  accounts?: ReadonlyMap<string, { gateway: Gateway; platform: string }>;
+  family?: Omit<Parameters<typeof serveFamilyPanel>[3], "authorized">;
+  familySignals?: Parameters<typeof serveFamilySignals>[3];
+  mcpAdmin?: (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => Promise<boolean>;
 }
 
 export class StatusPanel {
@@ -86,6 +92,12 @@ export class StatusPanel {
 
   private async route(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+    if (this.deps.familySignals && await serveFamilySignals(req, res, url, this.deps.familySignals)) return;
+    if (await this.deps.mcpAdmin?.(req, res, url)) return;
+    if (this.deps.family && await serveFamilyPanel(req, res, url, {
+      ...this.deps.family,
+      authorized: () => Boolean(this.deps.cfg.web.token) && this.authOk(req, new URL(url.pathname, url.origin)),
+    })) return;
     if (url.pathname === "/anteros") { res.writeHead(302, { Location: "/anteros/" }); res.end(); return; }
     if (url.pathname.startsWith("/anteros/")) { await this.serveAnteros(res, url.pathname.slice("/anteros/".length)); return; }
     if (url.pathname.startsWith("/api/v2") && await this.api2.handle(req, res, url, (r, code, body) => this.json(r, code, body))) return;
@@ -108,6 +120,11 @@ export class StatusPanel {
           capabilities: gateway.getProvider().capabilities(),
         },
         stats,
+        accounts: [...this.deps.accounts ?? []].map(([id, account]) => {
+          const health = account.gateway.getProvider().health();
+          return { id, platform: account.platform, connection: health.connection, login: health.login,
+            capabilities: account.gateway.getProvider().capabilities(), stats: account.gateway.getStats() };
+        }),
         queue,
         mcp: mcp.statuses(),
         timezone: this.deps.cfg.timezone,

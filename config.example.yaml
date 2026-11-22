@@ -1,4 +1,4 @@
-# QQ 群聊机器人配置示例
+# 安忒洛斯配置示例
 # 复制为 config.yaml 后修改。令牌类配置用 *_env 指向环境变量，不写入本文件。
 
 timezone: Asia/Shanghai
@@ -12,7 +12,7 @@ database:
   path: data/bot.db
 
 gateway:
-  # 目前实现 onebot（OneBot v11 正向 WebSocket，适配 SnowLuma / NapCat / LLOneBot 等）
+  # 主入口可选 onebot、discord 或 telegram。已有部署保持原 account_id。
   provider: onebot
   account_id: default # 本机器人账号的逻辑名，用于数据隔离
   onebot:
@@ -28,6 +28,44 @@ gateway:
     history_action: get_group_msg_history # 群历史动作名（扩展 API）
     backfill_max_pages: 5 # 重连后历史补取最大页数（0 = 关闭）
     backfill_page_limit: 100
+  # 主入口选 discord 或 telegram 时，填写对应节的 token_env：
+  # discord: { token_env: DISCORD_BOT_TOKEN }
+  # telegram: { token_env: TELEGRAM_BOT_TOKEN }
+  # additional_accounts:
+  #   - provider: discord
+  #     account_id: discord
+  #     owner_id: "123456789012345678"
+  #     token_env: DISCORD_BOT_TOKEN
+  #     groups: ["234567890123456789"]
+  #   - provider: telegram
+  #     account_id: telegram
+  #     owner_id: "123456789"
+  #     token_env: TELEGRAM_BOT_TOKEN
+  #     groups: ["-1001234567890:42"]
+
+# 可选：把主账号的所有者和各附加账号的 owner_id 绑定到同一个家庭私聊。
+# family:
+#   owner_id: "10001" # 必须是主账号 tools.owner_ids 中真实的主人 ID
+#   signal_token_env: ANTEROS_SIGNAL_TOKEN # 省略时外部事件使用面板令牌
+#   background_mcp_tools: [mcp__project__search] # 允许后台任务调用的完整工具名
+#   model_failover:
+#     kirishima: # 成员卡中的稳定 ID
+#       primary_profile: main
+#       fallback_profiles: [backup] # model.profiles 的 name 或完整目录档位名
+#       max_attempts: 3
+#       attempt_timeout_ms: 30000
+#       total_timeout_ms: 60000
+#       cooldown_ms: 60000
+
+# 可选：登记可以明确指定的跨端发送目的地。更多例子见 README。
+# cross_platform:
+#   destinations:
+#     - id: dc
+#       aliases: [Discord书房]
+#       account_id: discord
+#       conversation_type: group
+#       target_id: "234567890123456789"
+#       capabilities: [text, file, image, voice]
 
 groups:
   allowlist: [] # 启用的群号列表；空列表 = 不启用任何群
@@ -35,6 +73,9 @@ groups:
   link_preview: false # 链接是否读取、如何回应由主模型决定
   link_preview_cooldown_minutes: 120 # 同一链接同群的冷却时间
   max_reply_chars: 1200 # 单条回复上限，超长自动分段
+  long_image_chars: 0 # 回复达到这么多字就渲染成长图发出；0 关闭
+  owner_bypass_limits: false # 主人发言不受环境插话冷却和窗口配额限制
+  recent_image_on_reply: false # 回复无图消息却问“这张图”时，也去取最近的图
   conversation:
     enabled: true # 同一主模型决定回复、静默及当前攻击者拉黑
     owner_aliases: [] # 主人完整名字/昵称；别人 @主人或提及主人可自动插话，仍受环境冷却/配额
@@ -156,6 +197,7 @@ tools:
   email:
     enabled: false # 独立SMTP/IMAP邮箱；固定EMAIL_*私密环境变量，不依赖飞书邮箱授权
   mcp:
+    # managed_enabled: true # 启用 /mcp 的托管发现、安装及管理；需要 web.token_env
     enabled: false
     connect_timeout_ms: 60000 # stdio/npx 冷启动可能超过 15 秒
     call_timeout_ms: 120000
@@ -212,6 +254,7 @@ web:
   enabled: true
   host: 127.0.0.1
   port: 8642
+  token_env: ANTEROS_WEB_TOKEN # 家庭工作台和托管 MCP 管理使用 Bearer 令牌
   token: "" # 非空时 API 写操作需要 ?token= 或 Authorization
 
 admins: [] # 管理员 QQ 号（如 [10000, 10001]）

@@ -1,6 +1,7 @@
 import type { Database, DBRow_Message } from "../db/index.js";
 import type { ContentPart } from "../llm/index.js";
-import type { MessageRecord } from "../types.js";
+import type { MessageRecord, Provider } from "../types.js";
+import { telegramFileIdFromUri } from "../telegram/api.js";
 
 export interface ContextImage {
   url: string;
@@ -16,6 +17,10 @@ export function messageImageUrls(message: MessageRecord): string[] {
   const urls = new Set<string>();
   for (const segment of message.segments) {
     if (segment.type !== "image" || typeof segment.data.url !== "string") continue;
+    if (message.providerId === "telegram" && telegramFileIdFromUri(segment.data.url)) {
+      urls.add(segment.data.url);
+      continue;
+    }
     try {
       const url = new URL(segment.data.url);
       if (url.protocol === "https:" || url.protocol === "http:") urls.add(segment.data.url);
@@ -51,26 +56,28 @@ const isBriefCaption = (text: string): boolean => text.length <= 100 && /^[^\n�
 /** Prioritize the actual question, its quoted image and trusted supplements.
  * Recent images are opt-in: unrelated messages must not re-open old pictures. */
 export function collectImageContext(db: Database, message: MessageRecord, merged: MessageRecord[] = [],
-  options: { resumeRecentImage?: boolean; attachJustSentOwnImage?: boolean } = {}): ContextImage[] {
+  options: { resumeRecentImage?: boolean; attachJustSentOwnImage?: boolean; recentOnReply?: boolean; canSee?: (eventKey: string) => boolean } = {}): ContextImage[] {
   const images: ContextImage[] = [];
   const seen = new Set<string>();
   const triggerAt = Date.parse(message.sentAt);
   const upperTime = Date.now() + 30_000;
   const sameConversation = (record: MessageRecord) => record.accountId === message.accountId
-    && record.conversationId === message.conversationId && record.groupId === message.groupId;
+    && record.conversationId === message.conversationId && record.groupId === message.groupId
+    && (options.canSee?.(record.eventKey) ?? true);
   const currentRow = db.getMessageByEventKey(message.eventKey);
   const currentId = currentRow && sameConversation(db.rowToRecord(currentRow)) ? currentRow.id : null;
   // Scope and chronology must be checked before LIMIT. QQ timestamps have only
   // second precision, so the insertion id also excludes later same-second posts.
   const priorRows = (anchor: MessageRecord, anchorId: number | null, ageMs: number, senderId?: string): DBRow_Message[] => {
     if (!Number.isFinite(Date.parse(anchor.sentAt))) return [];
-    return db.db.prepare(`SELECT * FROM messages WHERE account_id=? AND conversation_id=? AND group_id IS ?
+    const rows = db.db.prepare(`SELECT * FROM messages WHERE account_id=? AND conversation_id=? AND group_id IS ?
       AND status='active' AND message_id!=? AND sent_at>=?
       AND (sent_at<? OR (sent_at=? AND (? IS NULL OR id<?)))
       ${senderId === undefined ? "" : "AND sender_id=?"}
       ORDER BY sent_at DESC,id DESC LIMIT 80`).all(message.accountId, message.conversationId, message.groupId ?? null,
       anchor.messageId, new Date(Date.parse(anchor.sentAt) - ageMs).toISOString(), anchor.sentAt, anchor.sentAt,
       anchorId, anchorId, ...(senderId === undefined ? [] : [senderId])) as unknown as DBRow_Message[];
+    return options.canSee ? rows.filter(row => options.canSee!(row.event_key)) : rows;
   };
   const repliedImage = (anchor: MessageRecord, anchorId: number | null): MessageRecord | undefined => {
     const visited = new Set<string>([anchor.messageId]);
@@ -83,7 +90,7 @@ export function collectImageContext(db: Database, message: MessageRecord, merged
         AND message_id=? AND status='active' AND (sent_at<? OR (sent_at=? AND (? IS NULL OR id<?)))`)
         .get(message.accountId, message.conversationId, message.groupId ?? null, child.replyToMessageId,
           child.sentAt, child.sentAt, childId, childId) as DBRow_Message | undefined;
-      if (!row || !Number.isFinite(Date.parse(row.sent_at))) return;
+      if (!row || !Number.isFinite(Date.parse(row.sent_at)) || options.canSee?.(row.event_key) === false) return;
       const record = db.rowToRecord(row);
       if (messageImageUrls(record).length) return record;
       child = record;
@@ -154,7 +161,8 @@ export function collectImageContext(db: Database, message: MessageRecord, merged
     }
   }
   const needsRecentImages = images.length === 0
-    ? !message.replyToMessageId && (asksAboutImage || asksCapability)
+    // 2026-11-09：回复某条（无图或机器人自己的）消息、但问的是“这三张图”时，也去取最近的图。
+    ? (options.recentOnReply || !message.replyToMessageId) && (asksAboutImage || asksCapability)
     : asksForComparison || (!message.replyToMessageId && refersToEarlierImage);
   if (Number.isFinite(triggerAt) && needsRecentImages) {
     const records = priorRows(message, currentId, 10 * 60_000).map(row => db.rowToRecord(row));
@@ -165,6 +173,23 @@ export function collectImageContext(db: Database, message: MessageRecord, merged
     } else for (const record of records) collect(record, "recent");
   }
   return images.slice(0, 6);
+}
+
+export async function resolveProviderImageContext(provider: Provider, images: ContextImage[]): Promise<ContextImage[]> {
+  if (provider.providerId !== "telegram") return images;
+  const resolved = await Promise.all(images.map(async image => {
+    const fileId = telegramFileIdFromUri(image.url);
+    if (!fileId) return image;
+    if (!provider.downloadIncomingFile) return;
+    try {
+      const bytes = await provider.downloadIncomingFile({ fileId, maxBytes: 4 * 1024 * 1024, timeoutMs: 10_000 });
+      // Telegram PhotoSize objects carry JPEGs. Avoid labeling error pages or
+      // arbitrary document bytes as an image.
+      if (bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) return;
+      return { ...image, url: `data:image/jpeg;base64,${Buffer.from(bytes).toString("base64")}` };
+    } catch { return; }
+  }));
+  return resolved.filter((image): image is ContextImage => !!image);
 }
 
 export function imageContextParts(images: ContextImage[]): ContentPart[] {
