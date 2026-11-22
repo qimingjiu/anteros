@@ -26,7 +26,7 @@ export interface EmailDependencies {
   smtpFactory?: (options: SMTPTransport.Options) => EmailSmtpClient;
   timeoutMs?: number;
   /** Recent texts (newest first) by the owner or the bot itself in one conversation; used to honor a short "去发" confirmation. */
-  recentTexts?: (conversationId: string, senderIds: string[], limit: number) => string[];
+  recentTexts?: (conversationId: string, senderIds: string[], limit: number, message?: MessageRecord) => string[];
 }
 type Action = "status" | "list" | "search" | "read" | "send";
 type Journal = { hash: string; state: "sending" | "accepted" | "unknown" | "failed"; messageId: string };
@@ -280,7 +280,7 @@ export class EmailService {
     if (!permittedRecipient(to, body, this.config!.defaultTo)) {
       // The owner may confirm briefly ("去发") a recipient that she or the bot named in the last few messages of this conversation.
       let recent: string[] = [];
-      try { recent = this.deps.recentTexts?.(message.conversationId, this.deps.ownerIds, 12) ?? []; } catch { recent = []; }
+      try { recent = this.deps.recentTexts?.(message.conversationId, this.deps.ownerIds, 12, message) ?? []; } catch { recent = []; }
       if (!recent.some(text => addressesIn(text).includes(to))) return fail("recipient_not_authorized");
     }
     if (typeof args.subject !== "string" || !args.subject.trim() || args.subject.length > 200 || /[\r\n\u0000-\u001f\u007f]/u.test(args.subject)

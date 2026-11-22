@@ -46,6 +46,16 @@ gateway:
 # 可选：把主账号的所有者和各附加账号的 owner_id 绑定到同一个家庭私聊。
 # family:
 #   owner_id: "10001" # 必须是主账号 tools.owner_ids 中真实的主人 ID
+#   signal_token_env: ANTEROS_SIGNAL_TOKEN # 省略时外部事件使用面板令牌
+#   background_mcp_tools: [mcp__project__search] # 允许后台任务调用的完整工具名
+#   model_failover:
+#     kirishima: # 成员卡中的稳定 ID
+#       primary_profile: main
+#       fallback_profiles: [backup] # model.profiles 的 name 或完整目录档位名
+#       max_attempts: 3
+#       attempt_timeout_ms: 30000
+#       total_timeout_ms: 60000
+#       cooldown_ms: 60000
 
 # 可选：登记可以明确指定的跨端发送目的地。更多例子见 README。
 # cross_platform:

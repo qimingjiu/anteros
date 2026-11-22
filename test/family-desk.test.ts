@@ -220,16 +220,19 @@ test("wall clock schedules skip a missing DST time and choose one fall-back time
 test("family panel keeps data and IDE actions behind token and exact origin", async () => {
   const db = new Database(":memory:");
   const service = desk(db);
-  const dispatched: { destination: string; file?: Buffer }[] = [];
+  const dispatched: { destination: string; file?: Buffer; room?: string }[] = [];
   const origin = "https://host.ide.example";
   const token = "test-ide-owner";
+  const room = "room:study";
   const server = createServer((req, res) => {
     if (serveFamilyPanel(req, res, new URL(req.url!, "http://" + req.headers.host), {
       desk: service, room: "family", allowedOrigins: [origin],
+      rooms: () => [{ id: "family", name: "客厅" }, { id: room, name: "书房" }],
+      activeRoom: () => room,
       authorized: () => req.headers.authorization === "Bearer " + token,
       destinations: () => ["discord"],
-      send: async ({ destination, resource }) => {
-        dispatched.push({ destination, file: resource.file?.bytes });
+      send: async ({ destination, resource, familyRoomId }) => {
+        dispatched.push({ destination, file: resource.file?.bytes, room: familyRoomId });
         return { id: 1, status: "queued" };
       },
     })) return;
@@ -264,6 +267,8 @@ test("family panel keeps data and IDE actions behind token and exact origin", as
     const download = await fetch(base + "/api/family/artifact?member=raven&id=" + saved.artifact, { headers: auth });
     assert.equal(download.status, 200);
     assert.equal(await download.text(), "测试原件");
+    assert.equal((await fetch(base + "/api/family/artifact?room=family&member=raven&id=" + saved.artifact, { headers: auth })).status, 404);
+    assert.equal((await fetch(base + "/api/family?room=unregistered", { headers: auth })).status, 404);
     assert.equal((await fetch(base + "/api/family/artifact?member=mist&id=" + saved.artifact, { headers: auth })).status, 404);
     const forward = await fetch(base + "/api/family/toolbox/send?member=raven", {
       method: "POST", headers: { ...auth, "Content-Type": "application/json" },
@@ -271,6 +276,7 @@ test("family panel keeps data and IDE actions behind token and exact origin", as
     });
     assert.equal(forward.status, 202);
     assert.equal(dispatched[0]?.destination, "discord");
+    assert.equal(dispatched[0]?.room, room);
     assert.equal(dispatched[0]?.file?.toString(), "测试原件");
   } finally {
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

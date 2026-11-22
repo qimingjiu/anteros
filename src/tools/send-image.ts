@@ -125,6 +125,7 @@ export interface SendImageDeps {
   ownerIds: string[];
   waitTimeoutMs?: number;
   crossPlatform?: CrossPlatformDelivery;
+  familyRoomFor?: (source: MessageRecord) => string | undefined;
   downloadImage?: typeof downloadSendImage;
 }
 
@@ -226,8 +227,10 @@ export class SendImageService {
     }
     let task: { id: number; reused: boolean };
     try {
+      const room = this.deps.familyRoomFor?.(message);
       task = this.deps.gateway.enqueueSend({ taskKey, kind: "tool_image", conversationType, targetId,
-        payload: { kind: "segments", requesterId: message.senderId, accountId: message.accountId, segments } });
+        payload: { kind: "segments", requesterId: message.senderId, accountId: message.accountId, segments,
+          ...(room ? { familyRoomId: room, familySourceEventKey: message.eventKey } : {}) } });
     } catch { return failure("enqueue_failed", "图片未能进入发送队列", imageCount); }
     return this.waitForTask(task.id, imageCount, task.reused);
   }

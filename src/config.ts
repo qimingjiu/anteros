@@ -5,6 +5,7 @@ import path from "node:path";
 import YAML from "yaml";
 import { parseCron } from "./util/misc.js";
 import type { ResearchLimits, ProviderQuota } from "./tools/research.js";
+import type { MemberModelFailoverPolicy } from "./llm/member-routing.js";
 
 export interface ModelProfile {
   name: string;
@@ -17,6 +18,7 @@ export interface ModelProfile {
   apiKey: string;
   model: string;
   temperature?: number;
+  capabilities?: { tools?: boolean; vision?: boolean };
 }
 
 export interface ModelService {
@@ -101,7 +103,12 @@ export interface AppConfig {
       backfillPageLimit: number;
     };
   };
-  family?: { ownerId: string };
+  family?: {
+    ownerId: string;
+    modelFailover?: Record<string, MemberModelFailoverPolicy>;
+    backgroundMcpTools?: string[];
+    signalToken?: string;
+  };
   crossPlatform?: CrossPlatformConfig;
   groups: {
     allowlist: string[];
@@ -312,6 +319,45 @@ function strList(raw: Record<string, unknown>, key: string): string[] {
   const v = pick(raw, key);
   if (!Array.isArray(v)) return [];
   return v.map(String).filter((s) => s.length > 0);
+}
+
+function memberModelFailover(input: unknown): Record<string, MemberModelFailoverPolicy> | undefined {
+  if (input === undefined) return undefined;
+  if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).length > 100) {
+    throw new Error("配置错误: family.model_failover 必须是按成员 ID 配置的对象。");
+  }
+  const names = (value: unknown): value is string => typeof value === "string" && value.length > 0
+    && value === value.trim() && value.length <= 300 && !/[\x00-\x1f]/u.test(value);
+  const fields = ["primary_profile", "fallback_profiles", "max_attempts", "attempt_timeout_ms", "total_timeout_ms", "cooldown_ms"];
+  return Object.fromEntries(Object.entries(input).map(([member, raw]) => {
+    if (!/^[\p{L}\p{N}_-][\p{L}\p{N}_.-]{0,63}$/u.test(member) || !raw
+      || typeof raw !== "object" || Array.isArray(raw) || Object.keys(raw).some(key => !fields.includes(key))) {
+      throw new Error("配置错误: family.model_failover 的成员 ID 或字段无效。");
+    }
+    const record = raw as Record<string, unknown>;
+    const fallbacks = record.fallback_profiles;
+    if (!Array.isArray(fallbacks) || !fallbacks.length || fallbacks.length > 8 || !fallbacks.every(names)
+      || new Set(fallbacks).size !== fallbacks.length
+      || (record.primary_profile !== undefined && (!names(record.primary_profile) || fallbacks.includes(record.primary_profile)))) {
+      throw new Error("配置错误: 每个成员需指明唯一的备用模型档位，且与首选档位不同。");
+    }
+    const bounded = (key: string, min: number, max: number): number | undefined => {
+      const value = record[key];
+      if (value === undefined) return undefined;
+      if (typeof value !== "number" || !Number.isSafeInteger(value) || value < min || value > max) {
+        throw new Error(`配置错误: family.model_failover.${key} 范围为 ${min}–${max}。`);
+      }
+      return value;
+    };
+    return [member, {
+      primaryProfile: names(record.primary_profile) ? record.primary_profile : undefined,
+      fallbackProfiles: fallbacks,
+      maxAttempts: bounded("max_attempts", 1, 8),
+      attemptTimeoutMs: bounded("attempt_timeout_ms", 250, 120_000),
+      totalTimeoutMs: bounded("total_timeout_ms", 250, 180_000),
+      cooldownMs: bounded("cooldown_ms", 1000, 86_400_000),
+    }];
+  }));
 }
 
 function additionalAccounts(raw: unknown, primaryId: string, primary: ChatPlatform): AdditionalAccount[] {
@@ -546,6 +592,12 @@ export function loadConfig(configPath: string): AppConfig {
         : (optString(model, "api_key") || envValue(optString(model, "api_key_env") || undefined)));
       const mdl = optString(p, "model", optString(model, "model", ""));
       const temperature = pick(p, "temperature");
+      const rawCapabilities = p.capabilities;
+      if (rawCapabilities !== undefined && (!rawCapabilities || typeof rawCapabilities !== "object"
+        || Array.isArray(rawCapabilities) || Object.entries(rawCapabilities)
+          .some(([key, value]) => !["tools", "vision"].includes(key) || typeof value !== "boolean"))) {
+        throw new Error("配置错误: model.profiles[].capabilities 只接受 tools 和 vision 布尔字段。");
+      }
       resolvedProfiles.push({
         name,
         serviceName: optString(p, "service_name") || undefined,
@@ -555,6 +607,7 @@ export function loadConfig(configPath: string): AppConfig {
         apiKey,
         model: mdl,
         temperature: Number.isFinite(Number(temperature)) ? Number(temperature) : undefined,
+        ...(rawCapabilities ? { capabilities: rawCapabilities as NonNullable<ModelProfile["capabilities"]> } : {}),
       });
     }
     const names = new Set<string>();
@@ -1033,7 +1086,21 @@ export function loadConfig(configPath: string): AppConfig {
       if (!/^[1-9]\d{0,19}$/u.test(ownerId) || !(cfg.tools.ownerIds ?? cfg.admins).includes(ownerId)) {
         throw new Error("配置错误: family.owner_id 必须是主账号 tools.owner_ids 中的真实用户 ID");
       }
-      cfg.family = { ownerId };
+      const modelFailover = memberModelFailover(family.model_failover);
+      const backgroundMcpTools = family.background_mcp_tools;
+      if (backgroundMcpTools !== undefined && (!Array.isArray(backgroundMcpTools) || backgroundMcpTools.length > 100
+        || backgroundMcpTools.some(name => typeof name !== "string" || !/^mcp__[a-z0-9._-]+__[a-z0-9._-]+$/iu.test(name)
+          || name.length > 200))) {
+        throw new Error("配置错误: family.background_mcp_tools 必须是完整 MCP 工具名的列表。");
+      }
+      const tokenEnv = optString(family, "signal_token_env");
+      const signalToken = envValue(tokenEnv);
+      if (tokenEnv && !signalToken) throw new Error("配置错误: family.signal_token_env 所指环境变量为空。");
+      cfg.family = { ownerId,
+        ...(modelFailover ? { modelFailover } : {}),
+        ...(backgroundMcpTools ? { backgroundMcpTools: [...new Set(backgroundMcpTools as string[])] } : {}),
+        ...(signalToken ? { signalToken } : {}),
+      };
     }
   }
   if (raw.cross_platform !== undefined) cfg.crossPlatform = parseCrossPlatformConfig(raw.cross_platform);

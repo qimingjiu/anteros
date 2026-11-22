@@ -2,6 +2,7 @@
  * @typedef {object} ToolboxDockOptions
  * @property {string} gatewayURL Anteros status panel URL.
  * @property {() => string | Promise<string>} getToken The IDE's credential getter.
+ * @property {string} [room] Default stable room ID.
  * @property {string} [member] Default stable member ID.
  * @property {HTMLElement} [mount] Host element for the dock.
  */
@@ -35,6 +36,7 @@ export function installToolboxDock(options) {
     <button class="opener" type="button" aria-expanded="false">工具箱</button>
     <section class="panel" aria-label="安忒洛斯工具箱" hidden>
       <div class="row">
+        <label>房间 <select class="room"></select></label>
         <label>成员 <select class="member"></select></label>
         <label>分类 <select class="category">
           <option value="">全部</option><option>前端</option><option>工具</option><option>资源</option><option>其它</option>
@@ -59,6 +61,7 @@ export function installToolboxDock(options) {
   `;
   const get = selector => shadow.querySelector("." + selector);
   const show = message => { get("notice").textContent = message; };
+  let selectedRoom = options.room ?? "";
   let selectedMember = options.member ?? "";
   let disposed = false;
   let initial = false;
@@ -80,16 +83,20 @@ export function installToolboxDock(options) {
     return response;
   }
 
-  function query(values = {}) {
+  function selectedScope() {
+    return { room: selectedRoom, member: selectedMember, category: get("category").value };
+  }
+
+  function query(values = {}, scope = selectedScope()) {
     const parameters = new URLSearchParams(values);
-    if (selectedMember) parameters.set("member", selectedMember);
-    const category = get("category").value;
-    if (category) parameters.set("category", category);
+    if (scope.room) parameters.set("room", scope.room);
+    if (scope.member) parameters.set("member", scope.member);
+    if (scope.category) parameters.set("category", scope.category);
     return parameters;
   }
 
-  async function download(item) {
-    const response = await api("/api/family/artifact?" + query({ id: item.artifact }));
+  async function download(item, scope) {
+    const response = await api("/api/family/artifact?" + query({ id: item.artifact }, scope));
     const url = URL.createObjectURL(await response.blob());
     const save = document.createElement("a");
     save.href = url;
@@ -98,11 +105,11 @@ export function installToolboxDock(options) {
     setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
-  async function send(item) {
+  async function send(item, scope) {
     const destination = get("target").value;
     if (!destination) throw new Error("请先选择发送目的地。");
     const requestId = crypto.randomUUID();
-    const response = await api("/api/family/toolbox/send?" + query(), "POST",
+    const response = await api("/api/family/toolbox/send?" + query({}, scope), "POST",
       JSON.stringify({ id: item.id, destination, requestId }), "application/json");
     const receipt = await response.json();
     show("投递已登记" + (receipt.id ? "，编号 " + receipt.id : "") + "。");
@@ -114,7 +121,7 @@ export function installToolboxDock(options) {
     };
   }
 
-  function itemView(item, canSend) {
+  function itemView(item, canSend, scope) {
     const row = document.createElement("div");
     row.className = "item";
     const title = item.url ? document.createElement("a") : document.createElement("p");
@@ -130,13 +137,13 @@ export function installToolboxDock(options) {
     if (item.artifact) {
       const button = document.createElement("button");
       button.textContent = "下载";
-      button.onclick = action(() => download(item));
+      button.onclick = action(() => download(item, scope));
       row.append(button);
     }
     if (canSend) {
       const button = document.createElement("button");
       button.textContent = "发送";
-      button.onclick = action(() => send(item));
+      button.onclick = action(() => send(item, scope));
       row.append(button);
     }
     return row;
@@ -148,7 +155,10 @@ export function installToolboxDock(options) {
     const result = await response.json();
     if (version !== searchVersion || disposed) return;
     initial = true;
+    selectedRoom = result.room;
     selectedMember = result.member;
+    get("room").replaceChildren(...result.rooms.map(room => new Option(room.name, room.id)));
+    get("room").value = selectedRoom;
     get("member").replaceChildren(...result.members.map(member => new Option(member.name, member.id)));
     get("member").value = selectedMember;
     const destination = get("target").value;
@@ -157,17 +167,22 @@ export function installToolboxDock(options) {
     get("target").replaceChildren(new Option("选择目的地", ""), ...destinations.map(alias => new Option(alias, alias)));
     if (destinations.includes(destination)) get("target").value = destination;
     const list = get("items");
-    list.replaceChildren(...result.items.map(item => itemView(item, destinations.length > 0)));
+    const scope = selectedScope();
+    list.replaceChildren(...result.items.map(item => itemView(item, destinations.length > 0, scope)));
     if (!result.items.length) list.textContent = "暂无收藏";
   }
 
   async function capture(files, urls) {
     if (files.length + urls.length < 1 || files.length + urls.length > 8) throw new Error("一次可收纳 1 到 8 项。");
+    if (!selectedRoom || !selectedMember) await search();
+    const scope = selectedScope();
+    if (!scope.room || !scope.member) throw new Error("请先选择房间和成员。");
     for (const file of files) {
-      await api("/api/family/toolbox/file?" + query({ name: file.name || "clipboard.png" }), "PUT", file,
+      await api("/api/family/toolbox/file?" + query({ name: file.name || "clipboard.png" }, scope), "PUT", file,
         file.type || "application/octet-stream");
     }
-    await Promise.all(urls.map(url => api("/api/family/toolbox/url?" + query(), "POST", JSON.stringify({ url }), "application/json")));
+    await Promise.all(urls.map(url => api("/api/family/toolbox/url?" + query({}, scope), "POST",
+      JSON.stringify({ url }), "application/json")));
     show("已收纳。");
     await search();
   }
@@ -184,7 +199,17 @@ export function installToolboxDock(options) {
   get("opener").onclick = open;
   get("opener").onmouseenter = open;
   get("close").onclick = close;
-  get("member").onchange = action(async () => { selectedMember = get("member").value; await search(); });
+  get("room").onchange = action(async () => {
+    selectedRoom = get("room").value;
+    selectedMember = "";
+    get("items").replaceChildren();
+    await search();
+  });
+  get("member").onchange = action(async () => {
+    selectedMember = get("member").value;
+    get("items").replaceChildren();
+    await search();
+  });
   get("category").onchange = action(search);
   get("search").onclick = action(search);
   get("query").onkeydown = event => { if (event.key === "Enter") void action(search)(); };

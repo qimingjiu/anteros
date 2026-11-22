@@ -34,6 +34,7 @@ export interface CrossPlatformConsoleRequest {
   requestId: string;
   destination: string;
   resource: { name: string; url?: string; file?: CrossPlatformAttachment };
+  familyRoomId?: string;
 }
 
 export interface CrossPlatformReceipt {
@@ -49,12 +50,14 @@ interface DeliveryOptions {
   config: CrossPlatformConfig;
   accounts: ReadonlyMap<string, CrossPlatformAccount>;
   artifactRoot: string;
+  familyRoomFor?: (source: MessageRecord) => string | undefined;
 }
 
 interface SubmissionOptions {
   taskKey: string;
   waitTimeoutMs?: number;
   source?: MessageRecord;
+  familyRoomId?: string;
 }
 
 function digest(value: string | Buffer): string {
@@ -172,7 +175,7 @@ export class CrossPlatformDelivery {
   }
 
   /** The authenticated owner console grants authority with an explicit destination selection. */
-  async sendFromConsole({ requestId, destination, resource }: CrossPlatformConsoleRequest): Promise<CrossPlatformReceipt> {
+  async sendFromConsole({ requestId, destination, resource, familyRoomId }: CrossPlatformConsoleRequest): Promise<CrossPlatformReceipt> {
     if (typeof requestId !== "string" || !/^[a-z0-9_-]{1,100}$/iu.test(requestId) || typeof destination !== "string"
       || !resource || typeof resource.name !== "string" || !resource.name.trim() || resource.name.length > 200
       || /[\x00-\x1f\x7f]/u.test(resource.name)) {
@@ -196,7 +199,7 @@ export class CrossPlatformDelivery {
       throw new Error("收纳资源需要提供链接或文件。");
     }
     if (!route.capabilities.includes(content.kind)) throw new Error(`目的地 ${route.id} 未启用 ${content.kind} 发送。`);
-    return this.submit(route, content, { taskKey: `cross_platform_console:${digest(requestId)}` });
+    return this.submit(route, content, { taskKey: `cross_platform_console:${digest(requestId)}`, familyRoomId });
   }
 
   async enqueue(message: MessageRecord, route: CrossPlatformDestination, content: CrossPlatformContent,
@@ -210,7 +213,7 @@ export class CrossPlatformDelivery {
   }
 
   private async submit(destination: CrossPlatformDestination, content: CrossPlatformContent,
-    { taskKey, waitTimeoutMs, source }: SubmissionOptions): Promise<CrossPlatformReceipt> {
+    { taskKey, waitTimeoutMs, source, familyRoomId }: SubmissionOptions): Promise<CrossPlatformReceipt> {
     const account = this.options.accounts.get(destination.accountId)!;
     const kind = source ? `cross_platform_${content.kind}` : `cross_platform_console_${content.kind}`;
     const existing = this.options.db.db.prepare("SELECT id FROM send_tasks WHERE task_key = ?").get(taskKey) as { id: number } | undefined;
@@ -224,6 +227,11 @@ export class CrossPlatformDelivery {
       payload = { kind: "segments", segments: [{ type: "text", data: { text: content.text.trim() } }], ...attribution };
     } else {
       payload = await this.mediaPayload(account, destination, content, attribution);
+    }
+    const room = source ? this.options.familyRoomFor?.(source) : familyRoomId;
+    if (room && payload.kind === "segments" && destination.conversationType === "private") {
+      payload.familyRoomId = room;
+      payload.familySourceEventKey = source?.eventKey;
     }
     // Downloading or staging can take time. Check the same account and command again before submission.
     if (source) this.authorize(source, destination.id, content.kind);

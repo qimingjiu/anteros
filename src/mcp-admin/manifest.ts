@@ -1,4 +1,5 @@
 import { validateManagedMcpUrl } from "./remote.js";
+import { dockerImageReference } from "./docker-image.js";
 
 export const MCP_ID = /^[a-z][a-z0-9-]{0,31}$/;
 export const SECRET_REF = /^[a-z][a-z0-9_-]{0,63}$/;
@@ -8,6 +9,7 @@ const PYTHON_PACKAGE = /^[a-z0-9][a-z0-9._-]{0,99}$/i;
 const PYTHON_VERSION = /^(?:\d+!)?\d+(?:\.\d+)*(?:(?:a|b|rc)\d+)?(?:\.post\d+)?(?:\.dev\d+)?(?:\+[a-z0-9.]+)?$/i;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,79}$/;
 const RUNTIME_ENV = /^(?:path|home|userprofile|shell|comspec|pathext|systemroot|windir|node_.*|npm_.*|pnpm_.*|ld_.*|dyld_.*|py_.*|python.*|pip_.*|bash_env|env|electron_.*)$/i;
+const DOCKER_CLI_ENV = /^(?:DOCKER.*|CONTAINER_HOST|BUILDKIT_.*|BUILDX_.*|XDG_.*|SSL_CERT_.*|(?:HTTP|HTTPS|ALL|NO|FTP)_PROXY|TMPDIR|TEMP|TMP|SYSTEMDRIVE|HOMEDRIVE|HOMEPATH|APPDATA|LOCALAPPDATA|SSH_.*)$/i;
 const SECRET_ENV = /token|secret|password|api_?key|credential|authorization/i;
 const IDENTITY = /^[\p{L}\p{N}_.:/-]{1,100}$/u;
 const HEADER = /^(?!(?:host|content-length|content-type|connection|transfer-encoding|accept|mcp-.*)$)[A-Za-z][A-Za-z0-9-]{0,79}$/i;
@@ -19,17 +21,20 @@ interface SharedManifest {
   allowedTools?: string[];
 }
 export interface RemoteMcpManifest extends SharedManifest { kind: "remote"; url: string; secretHeaders: Record<string, string> }
-export interface LocalMcpManifest extends SharedManifest {
+interface StdioManifest extends SharedManifest {
+  args: string[];
+  env: Record<string, string>;
+  secretEnv: Record<string, string>;
+}
+export interface LocalMcpManifest extends StdioManifest {
   kind: "npm" | "python";
   package: string;
   version: string;
   executable?: string;
   module?: string;
-  args: string[];
-  env: Record<string, string>;
-  secretEnv: Record<string, string>;
 }
-export type ManagedMcpManifest = RemoteMcpManifest | LocalMcpManifest;
+export interface DockerMcpManifest extends StdioManifest { kind: "docker"; image: string }
+export type ManagedMcpManifest = RemoteMcpManifest | LocalMcpManifest | DockerMcpManifest;
 
 export function asObject(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
@@ -57,9 +62,10 @@ export function validateManagedManifest(input: unknown): ManagedMcpManifest {
   if (!source) throw new Error("请提供 MCP 安装清单");
   const { id, kind } = source;
   if (typeof id !== "string" || !MCP_ID.test(id)) throw new Error("MCP ID 必须由小写字母、数字或连字符组成");
-  if (kind !== "npm" && kind !== "python" && kind !== "remote") throw new Error("MCP 安装类型须为 npm、python 或 remote");
+  if (kind !== "npm" && kind !== "python" && kind !== "docker" && kind !== "remote") throw new Error("MCP 安装类型须为 npm、python、docker 或 remote");
   const common = ["id", "kind", "allowedAgents", "allowedRooms", "allowedTools"];
-  const specific = kind === "remote" ? ["url", "secretHeaders"] : ["package", "version", "executable", "module", "args", "env", "secretEnv"];
+  const stdio = ["args", "env", "secretEnv"];
+  const specific = kind === "remote" ? ["url", "secretHeaders"] : kind === "docker" ? ["image", ...stdio] : ["package", "version", "executable", "module", ...stdio];
   const accepted = new Set([...common, ...specific]);
   if (Object.keys(source).some(key => !accepted.has(key))) throw new Error("安装清单内含不支持的字段");
   const allowedAgents = [...new Set(strings(source.allowedAgents, 40, value => IDENTITY.test(value), "必须指定可用成员 ID"))];
@@ -77,6 +83,19 @@ export function validateManagedManifest(input: unknown): ManagedMcpManifest {
     }
     return { ...shared, kind, url, secretHeaders };
   }
+  const args = source.args === undefined ? [] : strings(source.args, 20,
+    value => value.length <= 1000 && !/[\x00-\x1f\x7f]/.test(value) && !/^--[\w-]*(?:token|secret|password|api[-_]?key)[\w-]*(?:=|$)/i.test(value),
+    "启动参数无效，凭据通过引用传递");
+  const validEnv = (name: string) => ENV_NAME.test(name) && !RUNTIME_ENV.test(name) && (kind !== "docker" || !DOCKER_CLI_ENV.test(name));
+  const env = record(source.env, (name, value) => validEnv(name) && !SECRET_ENV.test(name)
+    && value.length <= 2000 && !/[\x00-\x1f\x7f]/.test(value), "环境配置无效，凭据需要引用");
+  const secretEnv = record(source.secretEnv, (name, ref) => validEnv(name) && SECRET_REF.test(ref), "环境凭据引用无效");
+  const stdioConfig = { ...shared, args, env, secretEnv };
+  if (kind === "docker") {
+    const image = source.image;
+    if (typeof image !== "string" || !dockerImageReference(image)) throw new Error("Docker 镜像需要明确版本标签或 SHA-256 digest");
+    return { ...stdioConfig, kind, image };
+  }
   const pkg = source.package;
   const version = source.version;
   if (typeof pkg !== "string" || pkg.length > 150 || !(kind === "npm" ? NPM_PACKAGE : PYTHON_PACKAGE).test(pkg)) throw new Error("请提供包管理器中的有效包名");
@@ -88,12 +107,5 @@ export function validateManagedManifest(input: unknown): ManagedMcpManifest {
     throw new Error("Python 模块名称无效");
   }
   if (kind === "python" && Boolean(executable) === Boolean(module)) throw new Error("请选择一个 Python 模块或包声明的可执行名称");
-  const args = source.args === undefined ? [] : strings(source.args, 20,
-    value => value.length <= 1000 && !/[\x00-\x1f\x7f]/.test(value) && !/^--[\w-]*(?:token|secret|password|api[-_]?key)[\w-]*(?:=|$)/i.test(value),
-    "启动参数无效，凭据通过引用传递");
-  const validEnv = (name: string) => ENV_NAME.test(name) && !RUNTIME_ENV.test(name);
-  const env = record(source.env, (name, value) => validEnv(name) && !SECRET_ENV.test(name)
-    && value.length <= 2000 && !/[\x00-\x1f\x7f]/.test(value), "环境配置无效，凭据需要引用");
-  const secretEnv = record(source.secretEnv, (name, ref) => validEnv(name) && SECRET_REF.test(ref), "环境凭据引用无效");
-  return { ...shared, kind, package: pkg, version, executable, module, args, env, secretEnv };
+  return { ...stdioConfig, kind, package: pkg, version, executable, module };
 }

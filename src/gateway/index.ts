@@ -18,7 +18,8 @@ export type { GatewayEvent, MessageRecord, MessageSegment } from "../types.js";
 
 export type SendPayload =
   | { kind: "segments"; segments: MessageSegment[]; expiresAt?: string; requesterId?: string; accountId?: string;
-      replyKind?: "observation" | "owner_mention" | "direct"; replyBatch?: string; senderName?: string }
+      replyKind?: "observation" | "owner_mention" | "direct"; replyBatch?: string; senderName?: string;
+      familyRoomId?: string; familySourceEventKey?: string }
   | { kind: "file"; filePath: string; fileName: string; requesterId?: string; accountId?: string }
   | { kind: "poke"; userId: string; requesterId: string; accountId: string; expiresAt: string; sourceEventKey: string };
 
@@ -56,6 +57,7 @@ export class Gateway {
   private provider: Provider;
   /** 会话静默（主人说闭嘴）期间拦截一切待发消息，含定时/报告/进度。 */
   private sendHold?: (conversationType: "group" | "private", targetId: string) => boolean;
+  private familyRecorder?: (record: MessageRecord, room: string, sourceEventKey?: string) => void;
   private accountId: string;
   private subscribers: ((ev: GatewayEvent) => void)[] = [];
   private queueRunning = false;
@@ -230,6 +232,9 @@ export class Gateway {
   // ---------- 发送侧 ----------
 
   setSendHold(fn: (conversationType: "group" | "private", targetId: string) => boolean): void { this.sendHold = fn; }
+  setFamilyRecorder(fn: (record: MessageRecord, room: string, sourceEventKey?: string) => void): void {
+    this.familyRecorder = fn;
+  }
 
   /** 排队发送（幂等：taskKey 相同不会重复入队） */
   enqueueSend(t: {
@@ -363,7 +368,7 @@ export class Gateway {
     this.db.finishSendTask(taskId, result.status, result.error, result.messageId);
     // 已确认发送的文本消息回写消息库：下一轮对话的上下文里要能看到"自己说过什么"
     if (result.status === "confirmed" && result.messageId && payload.kind === "segments") {
-      this.recordOutgoingMessage(t, payload.segments, result.messageId, payload.senderName);
+      this.recordOutgoingMessage(t, payload, result.messageId);
     }
     if (result.status === "confirmed") this.stats.sentConfirmed++;
     else if (result.status === "failed") this.stats.sentFailed++;
@@ -380,12 +385,13 @@ export class Gateway {
     }
   }
 
-  private recordOutgoingMessage(t: { conversation_type: "group" | "private"; target_id: string; kind: string }, segments: MessageSegment[], messageId: string, senderName?: string): void {
+  private recordOutgoingMessage(t: { conversation_type: "group" | "private"; target_id: string; kind: string },
+    payload: Extract<SendPayload, { kind: "segments" }>, messageId: string): void {
     try {
       const groupId = t.conversation_type === "group" ? t.target_id : undefined;
       const conversationId = groupId ? `group_${groupId}` : `private_${t.target_id}`;
       const selfId = this.provider.health().selfId ?? "self";
-      this.db.insertMessage({
+      const record: MessageRecord = {
         eventKey: `${this.accountId}:${conversationId}:message:${messageId}`,
         accountId: this.accountId,
         providerId: this.provider.providerId,
@@ -393,14 +399,16 @@ export class Gateway {
         groupId,
         messageId,
         senderId: selfId,
-        displayNameAtTime: senderName || "（你自己）",
+        displayNameAtTime: payload.senderName || "（你自己）",
         sentAt: new Date().toISOString(),
         receivedAt: new Date().toISOString(),
-        segments,
-        textContent: segmentsText(segments),
+        segments: payload.segments,
+        textContent: segmentsText(payload.segments),
         status: "active",
         origin: "live",
-      });
+      };
+      if (payload.familyRoomId) this.familyRecorder?.(record, payload.familyRoomId, payload.familySourceEventKey);
+      this.db.insertMessage(record);
     } catch (e) {
       log.debug("回写已发送消息失败（不影响发送）:", (e as Error).message);
     }

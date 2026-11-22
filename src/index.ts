@@ -45,6 +45,9 @@ import { configuredAccounts, createPlatformProvider } from "./platform-accounts.
 import { CrossPlatformDelivery, type CrossPlatformAccount } from "./cross-platform/index.js";
 import { FamilyDesk } from "./family/index.js";
 import { PrivateTranscript } from "./family/transcript.js";
+import { FamilyRooms } from "./family/rooms.js";
+import { BackgroundTaskRunner } from "./family/background.js";
+import type { PersonaSwitcher } from "./agent/persona-switch.js";
 import { McpAdmin } from "./mcp-admin/index.js";
 import { createMcpAdminHandler } from "./mcp-admin/panel.js";
 
@@ -105,15 +108,36 @@ async function main(): Promise<void> {
       providerFileRoot: config.gateway.provider === "onebot" && config.documents?.providerOutputDir
         ? path.posix.join(config.documents.providerOutputDir, ".cross-platform") : undefined },
   ]));
-  const crossPlatform = cfg.crossPlatform?.destinations.length ? new CrossPlatformDelivery({
-    db, config: cfg.crossPlatform, accounts: routeAccounts,
-    artifactRoot: path.join(resolveDataPath(baseDir, cfg.documents?.outputDir ?? "data/documents"), ".cross-platform"),
-  }) : undefined;
-  const linked = cfg.family ? new PrivateTranscript(db, accounts.map(({ config, provider }, index) => ({
+  let sharedWorld: ReturnType<Agent["familyWorld"]> | undefined;
+  const familyRoom = cfg.family ? `family:${cfg.gateway.accountId}:${cfg.family.ownerId}` : undefined;
+  const peers = cfg.family ? accounts.map(({ config, provider }, index) => ({
     accountId: config.gateway.accountId,
     ownerIds: index === 0 ? [cfg.family!.ownerId] : config.tools.ownerIds ?? config.admins,
     botId: () => provider.health().selfId,
-  }))) : undefined;
+  })) : [];
+  const boundOwner = (message: MessageRecord) => peers.some(peer => peer.accountId === message.accountId
+    && peer.ownerIds.includes(message.senderId)) && !db.isUserBlocked(message.accountId, message.senderId);
+  const rooms = familyRoom ? new FamilyRooms(db, {
+    homeId: familyRoom, isOwner: boundOwner, catalog: () => sharedWorld?.personas.list() ?? [],
+  }) : undefined;
+  const linked = rooms ? new PrivateTranscript(db, peers, { rooms }) : undefined;
+  const canSeeRoomEvent = (source: MessageRecord, eventKey: string) =>
+    !rooms?.roomFor(source) || (!!eventKey && rooms.messageInRoom(source, eventKey));
+  if (rooms) {
+    for (const { gateway, config } of accounts) {
+      const ownerIds = peers.find(peer => peer.accountId === config.gateway.accountId)?.ownerIds ?? [];
+      gateway.setFamilyRecorder((record, room, source) => {
+        if (!record.groupId && ownerIds.some(owner => record.conversationId === `private_${owner}`)) {
+          rooms.recordMessage(record.eventKey, room, source);
+        }
+      });
+    }
+  }
+  const crossPlatform = cfg.crossPlatform?.destinations.length ? new CrossPlatformDelivery({
+    db, config: cfg.crossPlatform, accounts: routeAccounts,
+    artifactRoot: path.join(resolveDataPath(baseDir, cfg.documents?.outputDir ?? "data/documents"), ".cross-platform"),
+    familyRoomFor: source => rooms?.roomFor(source),
+  }) : undefined;
 
   // 模型（支持管理员切换档位）
   const catalog = await discoverModelProfiles(cfg.model.providers ?? [], db);
@@ -136,10 +160,17 @@ async function main(): Promise<void> {
     ? new PageReader({ ...cfg.tools.reader, runtime: research, tavilyApiKey: cfg.tools.search.tavilyApiKey })
     : null;
   const mcp = new McpManager(cfg.tools.mcp, (tool: ToolDef) => tool.name.startsWith("mcp__"));
+  let familyDesk: FamilyDesk | undefined;
   const mcpAdmin = cfg.tools.mcp.enabled && cfg.tools.mcp.managedEnabled && cfg.web.enabled && cfg.web.token
     ? new McpAdmin({ db: db.db, manager: mcp, directory: resolveDataPath(baseDir, "data/mcp"),
       isOwner: (accountId, requesterId) => Boolean(routeAccounts.get(accountId)?.ownerIds.includes(requesterId)
-        && !db.isUserBlocked(accountId, requesterId)) })
+        && !db.isUserBlocked(accountId, requesterId)),
+      onJobCompleted: job => {
+        for (const room of rooms?.list() ?? []) {
+          familyDesk?.externalEvent(room.id, { id: job.id + ":" + job.status, name: job.service,
+            data: { status: job.status, action: job.action, service: job.service, jobId: job.id } }, "mcp_job_completed");
+        }
+      } })
     : undefined;
   const weather = cfg.weather?.enabled ? new OpenMeteoWeather(cfg.weather) : null;
   const notion = cfg.tools.enabled && cfg.notion?.enabled
@@ -155,24 +186,39 @@ async function main(): Promise<void> {
     familyTurn = next.catch(() => undefined);
     return next;
   };
-  let sharedWorld: ReturnType<Agent["familyWorld"]> | undefined;
-  const familyRoom = cfg.family ? `family:${cfg.gateway.accountId}:${cfg.family.ownerId}` : undefined;
+  const roomSwitchers = new Map<string, PersonaSwitcher>();
+  const roomPersonas = (roomId: string): PersonaSwitcher | undefined => {
+    const home = sharedWorld?.personas;
+    if (roomId === familyRoom) return home;
+    const room = rooms?.get(roomId);
+    if (!home || !rooms || !room?.memberIds.length) return undefined;
+    let instance = roomSwitchers.get(roomId);
+    if (!instance) {
+      instance = home.forRoom(() => rooms.get(roomId)?.memberIds ?? [], rooms.personaState(roomId));
+      roomSwitchers.set(roomId, instance);
+    }
+    return instance;
+  };
   const memberModels = new Map<string, { llm: ModelSwitcher; selection: ModelSelection }>();
   const familyModel = (member: PersonaCard) => {
     if (!familyRoom || !modelSwitcher) return undefined;
     let route = memberModels.get(member.id);
     if (!route) {
-      const scoped = modelSwitcher.forMember(familyRoom, member.id, member.name);
+      const policies = cfg.family?.modelFailover;
+      const policy = policies && Object.hasOwn(policies, member.id) ? policies[member.id] : undefined;
+      const scoped = modelSwitcher.forMember(familyRoom, member.id, member.name, policy);
       route = { llm: scoped, selection: new ModelSelection(scoped) };
       memberModels.set(member.id, route);
     }
     return route;
   };
   const incomingServices = new Map<string, IncomingDocumentService>();
-  const familyDesk = linked && familyRoom ? new FamilyDesk(db, {
-    isOwner: (message: MessageRecord) => linked.has(message) && !db.isUserBlocked(message.accountId, message.senderId),
-    members: () => sharedWorld?.personas.list() ?? [],
-    room: () => familyRoom,
+  const accountAgents = new Map<string, Agent>();
+  const background = rooms ? new BackgroundTaskRunner(db) : undefined;
+  familyDesk = linked && familyRoom && rooms ? new FamilyDesk(db, {
+    isOwner: message => linked.has(message) && boundOwner(message),
+    members: room => roomPersonas(room ?? familyRoom)?.list() ?? [],
+    room: source => rooms.roomFor(source),
     timeZone: cfg.timezone,
     readPage: reader ? async url => {
       const page = await reader.read(url);
@@ -180,18 +226,33 @@ async function main(): Promise<void> {
       return page;
     } : undefined,
     loadAttachments: source => incomingServices.get(source.accountId)?.loadCurrentAttachments(source) ?? Promise.resolve([]),
-    generate: async (memberId, text, signal) => {
-      const personas = sharedWorld?.personas;
+    generate: async (memberId, text, signal, room) => {
+      const personas = roomPersonas(room ?? familyRoom);
       const member = personas?.list().find(card => card.id === memberId);
       if (!personas || !member) throw new Error("家庭成员不存在");
       const result = await (familyModel(member)?.llm ?? llm).chat([{ role: "system", content: personas.promptOf(member) },
         { role: "user", content: text }], { tools: [], signal });
       return result.content;
     },
+    executeTask: async (job, prompt, signal, lease) => {
+      const personas = roomPersonas(job.room);
+      const member = personas?.list().find(card => card.id === job.member);
+      const agent = accountAgents.get(job.source.accountId);
+      if (!background || !agent || !member || !personas) throw new Error("后台任务的成员或入口已解绑");
+      const { tools, context } = agent.familyBackgroundTools(job.source, job.member);
+      return research.withSession(JSON.stringify(["family-task", job.room, job.id]), () => background.run({
+        job, prompt, persona: personas.promptOf(member), llm: familyModel(member)?.llm ?? llm, tools, context, signal, lease,
+      }), signal);
+    },
     transcript: (source, start, end) => linked.read(source, start, end, { limit: 2000 }),
-    notify: async ({ key, source, text, destination, artifact }) => {
+    notify: async ({ key, source: retained, text, destination, artifact }) => {
+      const stored = db.getMessageByEventKey(retained.eventKey);
+      const source = stored ? db.rowToRecord(stored) : retained.segments.length ? retained : {
+        ...retained, segments: [{ type: "text" as const, data: { text: retained.textContent } }],
+      };
       const account = routeAccounts.get(source.accountId);
-      if (!account || !linked.has(source) || db.isUserBlocked(source.accountId, source.senderId)) {
+      const room = rooms.roomFor(source);
+      if (!account || !room || !linked.has(source) || !boundOwner(source)) {
         throw new Error("家庭通知的原始私聊已解绑");
       }
       if (destination) {
@@ -206,7 +267,7 @@ async function main(): Promise<void> {
       }
       account.gateway.enqueueSend({ taskKey: `family:${key}`, kind: "family_notice", conversationType: "private",
         targetId: source.senderId, payload: { kind: "segments", segments: [{ type: "text", data: { text: text.slice(0, 1500) } }],
-          requesterId: source.senderId, accountId: source.accountId } });
+          requesterId: source.senderId, accountId: source.accountId, familyRoomId: room, familySourceEventKey: source.eventKey } });
     },
   }) : undefined;
   function createAccountRuntime(account: (typeof accounts)[number], primary: boolean) {
@@ -217,7 +278,11 @@ async function main(): Promise<void> {
     }) : null;
     const incomingDocuments = cfg.tools.enabled && (cfg.documents?.enabled || crossPlatform || familyDesk)
       && cfg.features?.incomingFiles !== false
-      ? new IncomingDocumentService({db:db.db,ownerIds:cfg.tools.ownerIds ?? cfg.admins,provider}) : null;
+      ? new IncomingDocumentService({ db: db.db, ownerIds: cfg.tools.ownerIds ?? cfg.admins, provider,
+        roomVisibility: source => {
+          const roomId = rooms?.roomFor(source);
+          return rooms && roomId ? { roomId, canSee: key => rooms.messageInRoom(source, key) } : undefined;
+        } }) : null;
     if (incomingDocuments) incomingServices.set(cfg.gateway.accountId, incomingDocuments);
     const documentDelivery = cfg.documents?.enabled ? new DocumentDelivery({
       db, gateway, accountId: cfg.gateway.accountId,
@@ -250,11 +315,14 @@ async function main(): Promise<void> {
         ? path.posix.join(cfg.documents.providerOutputDir, "media") : undefined,
       waitTimeoutMs:Math.min(60000,cfg.gateway.onebot.requestTimeoutMs+1500),
       crossPlatform,
+      canSee: rooms ? canSeeRoomEvent : undefined,
+      familyRoomFor: source => rooms?.roomFor(source),
     }) : null;
     const sendImage = cfg.tools.enabled ? new SendImageService({
       db,gateway,accountId:cfg.gateway.accountId,ownerIds:cfg.tools.ownerIds ?? cfg.admins,
       waitTimeoutMs:Math.min(60000,cfg.gateway.onebot.requestTimeoutMs+1500),
       crossPlatform,
+      familyRoomFor: source => rooms?.roomFor(source),
     }) : null;
     const muninnMemory = cfg.tools.enabled && cfg.tools.muninn?.enabled ? new MuninnMemoryService({
       mcp,accountId:cfg.gateway.accountId,ownerIds:cfg.tools.ownerIds ?? cfg.admins,
@@ -264,9 +332,13 @@ async function main(): Promise<void> {
     }) : null;
     const email = cfg.tools.enabled && cfg.tools.email?.enabled ? new EmailService({
       db,accountId:cfg.gateway.accountId,ownerIds:cfg.tools.ownerIds ?? cfg.admins,config:emailConfigFromEnv(),
-      recentTexts:(conversationId:string,senderIds:string[],limit:number)=>{
+      recentTexts:(conversationId:string,senderIds:string[],limit:number, source?: MessageRecord)=>{
         const self=provider.health().selfId; const ids=[...senderIds, ...(self?[String(self)]:[])];
         if(!ids.length) return [];
+        if (source && rooms?.roomFor(source) && linked) {
+          return linked.recent(source, { limit, asOfSource: true, excludeCurrent: true })
+            .filter(row => row.accountId === source.accountId).reverse().map(row => row.text);
+        }
         const rows=db.db.prepare(`SELECT sender_id, text_content FROM (SELECT sender_id, text_content FROM messages WHERE account_id=? AND conversation_id=? AND status='active' ORDER BY id DESC LIMIT ?) WHERE sender_id IN (${ids.map(()=>"?").join(",")})`)
           .all(cfg.gateway.accountId, conversationId, limit, ...ids) as {sender_id:string;text_content:string}[];
         return rows.map(r=>r.text_content);
@@ -308,7 +380,8 @@ async function main(): Promise<void> {
       muninnMemory,
       feishuTools,
       email,
-      recall: new RecallTools({ provider, db, ownerIds: (cfg.tools.ownerIds ?? cfg.admins).map(String) }),
+      recall: new RecallTools({ provider, db, ownerIds: (cfg.tools.ownerIds ?? cfg.admins).map(String),
+        canSee: rooms ? canSeeRoomEvent : undefined }),
       music: music ? { toolsFor: (m: any) => [...music.toolsFor(m), ...(voiceCall?.toolsFor(m) ?? [])] } : null,
       crossPlatform,
       familyDesk,
@@ -317,10 +390,13 @@ async function main(): Promise<void> {
       familyWorld: sharedWorld,
       familyModel,
       familyRoom: familyRoom ? "family" : undefined,
+      rooms,
+      roomPersonas,
       personaDirectory: baseDir,
       legacyWorldAccess: primary,
     });
     sharedWorld ??= agent.familyWorld();
+    accountAgents.set(cfg.gateway.accountId, agent);
 
     // 日报
     const reportEngine = primary ? new ReportEngine(db, cfg.reports, cfg.timezone, gateway, llm) : null;
@@ -346,8 +422,14 @@ async function main(): Promise<void> {
     startedAt, modelSwitcher, proactiveEngine: primary.proactiveEngine, presence: primary.presence, diagnostics, notion,
     notionReminders: primary.notionReminders, accounts: routeAccounts,
     mcpAdmin: mcpAdmin ? createMcpAdminHandler(mcpAdmin, cfg.web.token) : undefined,
-    family: familyDesk && familyRoom ? {
+    familySignals: familyDesk && rooms ? {
+      token: cfg.family?.signalToken ?? cfg.web.token,
+      resolveRoom: input => input === undefined || input === "family" ? rooms.homeId : rooms.get(input)?.id,
+      dispatch: (room, signal) => familyDesk!.externalEvent(room, signal),
+    } : undefined,
+    family: familyDesk && familyRoom && rooms ? {
       desk: familyDesk, room: familyRoom,
+      rooms: () => rooms.list(), activeRoom: () => rooms.current().id,
       allowedOrigins: (process.env.ANTEROS_IDE_ORIGINS ?? "").split(",").map(value => value.trim()).filter(Boolean),
       destinations: crossPlatform ? () => crossPlatform.consoleDestinations() : undefined,
       send: crossPlatform ? input => crossPlatform.sendFromConsole(input) : undefined,

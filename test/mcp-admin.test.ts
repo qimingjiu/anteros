@@ -96,13 +96,16 @@ test("托管 MCP 凭据加密、待补凭据可重试，失败更新和重启保
   await admin.stop();
   mounted.clear();
   const resumed = new McpAdmin({ db, manager, directory, isOwner: () => true });
-  t.after(() => resumed.stop());
-  await resumed.restore();
-  assert.equal(mounted.get("fixture")?.config.headers?.Authorization, secret);
-  const remove = resumed.submit("uninstall", { id: remote.id });
-  assert.equal((await settled(resumed, remove.id)).status, "succeeded");
-  assert.deepEqual(resumed.list(), []);
-  assert.deepEqual(resumed.vault.list(), ["provider-token"]);
+  try {
+    await resumed.restore();
+    assert.equal(mounted.get("fixture")?.config.headers?.Authorization, secret);
+    const remove = resumed.submit("uninstall", { id: remote.id });
+    assert.equal((await settled(resumed, remove.id)).status, "succeeded");
+    assert.deepEqual(resumed.list(), []);
+    assert.deepEqual(resumed.vault.list(), ["provider-token"]);
+  } finally {
+    await resumed.stop();
+  }
 });
 
 test("托管 MCP 沿用 stdio，引入实际调用范围并在移除后拒绝已捕获工具", async t => {

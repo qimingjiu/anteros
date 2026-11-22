@@ -13,6 +13,7 @@ import type { PhoneContextProvider } from "../presence/index.js";
 import type { RuntimeDiagnosticsProvider } from "../diagnostics/index.js";
 import { ApiV2 } from "./api2.js";
 import { serveFamilyPanel } from "../family/panel.js";
+import { serveFamilySignals } from "../family/signals.js";
 
 const log = logger("web");
 
@@ -31,6 +32,7 @@ export interface WebDeps {
   notionReminders?: {status(): Record<string, unknown>} | null;
   accounts?: ReadonlyMap<string, { gateway: Gateway; platform: string }>;
   family?: Omit<Parameters<typeof serveFamilyPanel>[3], "authorized">;
+  familySignals?: Parameters<typeof serveFamilySignals>[3];
   mcpAdmin?: (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => Promise<boolean>;
 }
 
@@ -90,6 +92,7 @@ export class StatusPanel {
 
   private async route(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+    if (this.deps.familySignals && await serveFamilySignals(req, res, url, this.deps.familySignals)) return;
     if (await this.deps.mcpAdmin?.(req, res, url)) return;
     if (this.deps.family && await serveFamilyPanel(req, res, url, {
       ...this.deps.family,

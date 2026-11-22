@@ -39,6 +39,8 @@ export interface MiniMaxMediaDeps {
   waitTimeoutMs?: number;
   generationTimeoutMs?: number;
   crossPlatform?: CrossPlatformDelivery;
+  canSee?: (source: MessageRecord, eventKey: string) => boolean;
+  familyRoomFor?: (source: MessageRecord) => string | undefined;
   /** Dependency injection for offline validation. Production uses the pinned, bounded downloader. */
   downloadAsset?: typeof downloadMiniMaxAsset;
 }
@@ -175,10 +177,10 @@ function recentMediaDraft(deps: MiniMaxMediaDeps, message: MessageRecord, kind: 
   const cue = kind === "image"
     ? /画|画面|提示词|prompt|生成.{0,8}图|image|picture/iu
     : /语音|男声|speech|voice|["“][A-Za-z][^"”]{0,1800}["”]/u;
-  return deps.db.recentMessages(message.conversationId, 20, message.sentAt).find(row => row.account_id === message.accountId
+  return deps.db.recentMessages(message.conversationId, 20, message.sentAt, message.accountId).find(row => row.account_id === message.accountId
     && row.conversation_id === message.conversationId && (row.group_id ?? undefined) === message.groupId
     && row.sender_id === selfId && row.status === "active" && Date.parse(row.sent_at) >= sentAt - 120_000
-    && /[？?]\s*$/u.test(row.text_content) && cue.test(row.text_content))?.event_key;
+    && (deps.canSee?.(message, row.event_key) ?? true) && /[？?]\s*$/u.test(row.text_content) && cue.test(row.text_content))?.event_key;
 }
 
 export class MiniMaxMediaService {
@@ -345,8 +347,10 @@ export class MiniMaxMediaService {
       let file: string;
       try { file = await this.providerPath(artifact); }
       catch { return result("failed", "媒体文件当前不可用；没有自动重新生成。", { reason: "asset_unavailable" }); }
+      const room = this.deps.familyRoomFor?.(message);
       task = this.deps.gateway.enqueueSend({ taskKey: key, kind: `minimax_${kind}`, conversationType, targetId,
         payload: { kind: "segments", requesterId: message.senderId, accountId: message.accountId,
+          ...(room ? { familyRoomId: room, familySourceEventKey: message.eventKey } : {}),
           segments: [{ type: kind === "image" ? "image" : "record", data: { file } }] } });
     }
     const deadline = Date.now() + Math.max(0, Math.min(60000, this.deps.waitTimeoutMs ?? 21500));

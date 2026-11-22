@@ -7,10 +7,14 @@ import type { Category } from "./library.js";
 interface PanelOptions {
   desk: FamilyDesk;
   room: string;
+  rooms?: () => readonly { id: string; name: string }[];
+  activeRoom?: () => string;
   authorized: () => boolean;
   allowedOrigins?: readonly string[];
   destinations?: () => string[];
-  send?: (delivery: { requestId: string; destination: string; resource: ReturnType<FamilyDesk["dashboardResource"]> }) => Promise<unknown>;
+  send?: (delivery: {
+    requestId: string; destination: string; resource: ReturnType<FamilyDesk["dashboardResource"]>; familyRoomId?: string;
+  }) => Promise<unknown>;
 }
 
 function json(response: ServerResponse, status: number, body: unknown): void {
@@ -83,13 +87,21 @@ export function serveFamilyPanel(
     json(response, 401, { error: "请输入已配置的面板令牌。" });
     return true;
   }
+  const rooms = options.rooms?.() ?? [{ id: options.room, name: "客厅" }];
+  const explicitRoom = url.searchParams.get("room");
+  const current = options.activeRoom?.();
+  const room = explicitRoom ?? (rooms.some(entry => entry.id === current) ? current! : options.room);
+  if (!rooms.some(entry => entry.id === room)) {
+    json(response, 404, { error: "房间不存在。" });
+    return true;
+  }
   const member = url.searchParams.get("member") ?? undefined;
   if (url.pathname === "/api/family") {
-    json(response, 200, options.desk.dashboard(options.room, member));
+    json(response, 200, { ...options.desk.dashboard(room, member), room, rooms });
     return true;
   }
   if (url.pathname.startsWith("/api/family/toolbox")) {
-    void toolbox(request, response, url, options, member).catch(error => {
+    void toolbox(request, response, url, options, { room, rooms, member }).catch(error => {
       if (response.destroyed || response.writableEnded) return;
       const status = error instanceof SizeLimit ? 413 : 400;
       json(response, status, { error: error instanceof Error ? error.message.slice(0, 200) : "工具箱请求失败。" });
@@ -102,7 +114,7 @@ export function serveFamilyPanel(
     return true;
   }
   try {
-    const file = options.desk.dashboardArtifact(options.room, member, id);
+    const file = options.desk.dashboardArtifact(room, member, id);
     const safeName = encodeURIComponent(file.name).replace(/['()!*]/g, char => "%" + char.charCodeAt(0).toString(16));
     response.writeHead(200, {
       "Content-Type": "application/octet-stream", "Content-Length": file.bytes.length,
@@ -154,32 +166,37 @@ function readBody(request: IncomingMessage, limit: number): Promise<Buffer> {
   });
 }
 
-async function toolbox(request: IncomingMessage, response: ServerResponse, url: URL, options: PanelOptions, member?: string) {
-  const active = member ?? options.desk.dashboard(options.room, undefined).member;
+async function toolbox(
+  request: IncomingMessage, response: ServerResponse, url: URL, options: PanelOptions,
+  { room, rooms, member }: { room: string; rooms: readonly { id: string; name: string }[]; member?: string },
+) {
+  const active = member ?? options.desk.dashboard(room, undefined).member;
   if (!active) throw new Error("还没有配置任何成员。");
   const category = url.searchParams.get("category") as Category | null;
   if (url.pathname === "/api/family/toolbox") {
-    const items = options.desk.dashboardLibrary(options.room, active, url.searchParams.get("query") ?? "", category ?? undefined);
-    const { members } = options.desk.dashboard(options.room, active);
-    json(response, 200, { items, members, member: active, destinations: options.destinations?.() ?? [] });
+    const items = options.desk.dashboardLibrary(room, active, url.searchParams.get("query") ?? "", category ?? undefined);
+    const { members } = options.desk.dashboard(room, active);
+    json(response, 200, { items, members, member: active, room, rooms, destinations: options.destinations?.() ?? [] });
   } else if (url.pathname === "/api/family/toolbox/file") {
     const name = url.searchParams.get("name") ?? "收纳文件";
     const mime = String(request.headers["content-type"] || "application/octet-stream").split(";", 1)[0]!;
     const bytes = await readBody(request, 25 * 1024 * 1024);
-    const item = await options.desk.addDashboardResource(options.room, active, category ?? undefined, { name, mime, bytes });
+    const item = await options.desk.addDashboardResource(room, active, category ?? undefined, { name, mime, bytes });
     json(response, 201, item);
   } else if (url.pathname === "/api/family/toolbox/url") {
     const raw = JSON.parse((await readBody(request, 4096)).toString("utf8")) as { url?: unknown };
     if (typeof raw?.url !== "string") throw new Error("需要一个网址。");
-    const item = await options.desk.addDashboardResource(options.room, active, category ?? undefined, raw.url);
+    const item = await options.desk.addDashboardResource(room, active, category ?? undefined, raw.url);
     json(response, 201, item);
   } else {
     const raw = JSON.parse((await readBody(request, 4096)).toString("utf8")) as { id?: unknown; destination?: unknown; requestId?: unknown };
     if (!options.send || typeof raw?.id !== "string" || typeof raw.destination !== "string"
       || typeof raw.requestId !== "string" || !/^[a-z0-9_-]{12,100}$/i.test(raw.requestId)
       || !options.destinations?.().includes(raw.destination)) throw new Error("需要选择已绑定的发送目的地。");
-    const resource = options.desk.dashboardResource(options.room, active, raw.id);
-    json(response, 202, await options.send({ requestId: raw.requestId, destination: raw.destination, resource }));
+    const resource = options.desk.dashboardResource(room, active, raw.id);
+    json(response, 202, await options.send({
+      requestId: raw.requestId, destination: raw.destination, resource, familyRoomId: room,
+    }));
   }
 }
 
@@ -227,6 +244,7 @@ const page = `<!doctype html>
 <p id="status" class="status" role="status" aria-live="polite"></p>
 <div id="desk" hidden>
   <div class="row">
+    <label>房间 <select id="room"></select></label>
     <label>成员 <select id="member"></select></label>
     <button id="refresh" type="button">刷新</button>
     <button id="lock" type="button">锁定</button>
@@ -259,8 +277,8 @@ const page = `<!doctype html>
   async function api(path, signal) {
     return fetch(path, { headers:{Authorization:"Bearer " + credential}, credentials:"omit", cache:"no-store", signal });
   }
-  async function download(file, member) {
-    const params = new URLSearchParams({id:file.id, member});
+  async function download(file, member, room) {
+    const params = new URLSearchParams({id:file.id, member, room});
     try {
       const response = await api("/api/family/artifact?" + params);
       if (!response.ok) throw new Error();
@@ -274,17 +292,21 @@ const page = `<!doctype html>
       byId("status").textContent = "文件下载失败。";
     }
   }
-  async function load(member) {
+  async function load(room, member) {
     activeRequest?.abort();
     const request = new AbortController();
     activeRequest = request;
     byId("status").textContent = "正在读取…";
     try {
-      const query = member ? "?" + new URLSearchParams({member}) : "";
-      const response = await api("/api/family" + query, request.signal);
+      const params = new URLSearchParams();
+      if (room) params.set("room", room);
+      if (member) params.set("member", member);
+      const response = await api("/api/family?" + params, request.signal);
       if (!response.ok) throw new Error(response.status === 401 ? "面板令牌不可用。" : "读取失败。");
       const data = await response.json();
       if (request.signal.aborted) return;
+      byId("room").replaceChildren(...data.rooms.map(room => new Option(room.name, room.id)));
+      byId("room").value = data.room;
       byId("member").replaceChildren(...data.members.map(member => new Option(member.name, member.id)));
       if (data.member) byId("member").value = data.member;
       renderList("jobs", data.jobs, job => row(job.title, [states[job.state], job.receipt, "#" + job.id].filter(Boolean).join(" · ")));
@@ -293,7 +315,7 @@ const page = `<!doctype html>
         const item = row(file.name, (file.size / 1024).toFixed(1) + " KB");
         const downloadButton = document.createElement("button");
         downloadButton.textContent = "下载";
-        downloadButton.addEventListener("click", () => download(file, data.member));
+        downloadButton.addEventListener("click", () => download(file, data.member, data.room));
         item.append(downloadButton);
         return item;
       });
@@ -310,12 +332,16 @@ const page = `<!doctype html>
     byId("token").value = "";
     load();
   });
-  byId("member").addEventListener("change", () => load(byId("member").value));
-  byId("refresh").addEventListener("click", () => load(byId("member").value));
+  byId("room").addEventListener("change", () => {
+    for (const id of ["jobs", "inbox", "files"]) byId(id).replaceChildren();
+    load(byId("room").value);
+  });
+  byId("member").addEventListener("change", () => load(byId("room").value, byId("member").value));
+  byId("refresh").addEventListener("click", () => load(byId("room").value, byId("member").value));
   byId("lock").addEventListener("click", () => {
     activeRequest?.abort();
     credential = "";
-    for (const id of ["member", "jobs", "inbox", "files"]) byId(id).replaceChildren();
+    for (const id of ["room", "member", "jobs", "inbox", "files"]) byId(id).replaceChildren();
     byId("desk").hidden = true;
     byId("access").hidden = false;
     byId("status").textContent = "";

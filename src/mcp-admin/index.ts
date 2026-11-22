@@ -8,6 +8,10 @@ import { logger } from "../util/logger.js";
 import { asObject, MCP_ID, validateManagedManifest, type ManagedMcpManifest } from "./manifest.js";
 import { deployManagedLocal, managedLocalLaunch, managedRuntimeEnv } from "./local.js";
 import { McpCredentialVault, MissingMcpCredential } from "./vault.js";
+import { dockerImageReference } from "./docker-image.js";
+import {
+  createManagedDocker, deployManagedDocker, DockerExecutionError, managedDockerClientEnv, removeManagedDocker, type DockerExecutor,
+} from "./docker.js";
 
 const MAX_QUEUED_JOBS = 16;
 const MAX_SERVICES = 64;
@@ -15,7 +19,9 @@ const REGISTRY_TTL = 60 * 60_000;
 const log = logger("mcp-admin");
 type JobAction = "install" | "update" | "enable" | "disable" | "restart" | "uninstall";
 type JobState = "queued" | "running" | "succeeded" | "failed" | "awaiting_input" | "interrupted";
+export interface McpAdminJobCompletion { id: string; service: string; action: JobAction; status: Exclude<JobState, "queued" | "running"> }
 type ServiceRow = { id: string; manifest: string; deployment: string | null; enabled: number; updated_at: string };
+type DockerRunRow = { service: string; run_key: string };
 interface Service { manifest: ManagedMcpManifest; deployment: string | null; enabled: boolean; updatedAt: string }
 interface ManagedJob { id: string; service: string; action: JobAction; status: JobState; updatedAt: string; error?: string }
 interface RegistryListing {
@@ -23,7 +29,7 @@ interface RegistryListing {
   title?: string;
   description?: string;
   version?: string;
-  packages: { kind: "npm" | "python"; package: string; version: string }[];
+  packages: ({ kind: "npm" | "python"; package: string; version: string } | { kind: "docker"; image: string })[];
   remotes: { url: string; type: string }[];
 }
 
@@ -35,6 +41,8 @@ export interface McpAdminOptions {
   fetch?: typeof fetch;
   deploy?: typeof deployManagedLocal;
   launch?: typeof managedLocalLaunch;
+  dockerExecute?: DockerExecutor;
+  onJobCompleted?(job: McpAdminJobCompletion): void;
 }
 
 function serviceOf(row: ServiceRow): Service {
@@ -49,7 +57,10 @@ export class McpAdmin {
   private readonly forService = new Set<string>();
   private readonly restoreErrors = new Map<string, string>();
   private readonly cache = new Map<string, { at: number; results: RegistryListing[] }>();
+  private readonly interruptedJobs: McpAdminJobCompletion[];
+  private readonly liveDockerRuns = new Map<string, string>();
   private queue = Promise.resolve();
+  private stopping?: Promise<void>;
 
   constructor(private readonly options: McpAdminOptions) {
     const { db } = options;
@@ -63,11 +74,16 @@ export class McpAdmin {
         id TEXT PRIMARY KEY, service TEXT NOT NULL, action TEXT NOT NULL, status TEXT NOT NULL,
         updatedAt TEXT NOT NULL, error TEXT, input_manifest TEXT
       );
-      UPDATE managed_mcp_jobs SET status='interrupted', error='网关重启，中断的部署没有自动重跑'
-      WHERE status IN ('queued','running');
+      CREATE TABLE IF NOT EXISTS managed_mcp_docker_runs (
+        run_key TEXT PRIMARY KEY, service TEXT NOT NULL
+      );
     `);
     const columns = db.prepare("PRAGMA table_info(managed_mcp_jobs)").all() as { name: string }[];
     if (!columns.some(column => column.name === "input_manifest")) db.exec("ALTER TABLE managed_mcp_jobs ADD COLUMN input_manifest TEXT");
+    this.interruptedJobs = db.prepare(`UPDATE managed_mcp_jobs
+      SET status='interrupted', updatedAt=?, error='网关重启，中断的部署没有自动重跑'
+      WHERE status IN ('queued','running') RETURNING id,service,action,status`)
+      .all(now()) as unknown as McpAdminJobCompletion[];
   }
 
   private service(id: string): Service | undefined {
@@ -96,6 +112,8 @@ export class McpAdmin {
 
   restore(): Promise<void> {
     this.queue = this.queue.then(async () => {
+      for (const job of this.interruptedJobs.splice(0)) this.reportJob(job);
+      await this.cleanupDockerRuns();
       for (const row of this.rows()) {
         if (!row.enabled || this.abort.signal.aborted) continue;
         try {
@@ -109,9 +127,13 @@ export class McpAdmin {
     return this.queue;
   }
 
-  async stop(): Promise<void> {
+  stop(): Promise<void> {
     this.abort.abort();
-    await this.queue;
+    return this.stopping ??= this.queue.then(async () => {
+      for (const service of this.liveDockerRuns.keys()) await this.options.manager.removeManaged(service);
+      this.liveDockerRuns.clear();
+      await this.cleanupDockerRuns();
+    });
   }
 
   submit(action: unknown, input: { id?: unknown; manifest?: unknown }): ManagedJob {
@@ -154,10 +176,17 @@ export class McpAdmin {
   }
 
   private jobState(id: string, state: JobState, error?: string): void {
-    this.options.db.prepare("UPDATE managed_mcp_jobs SET status=?,updatedAt=?,error=? WHERE id=?")
-      .run(state, now(), error ?? null, id);
+    const row = this.options.db.prepare(`UPDATE managed_mcp_jobs SET status=?,updatedAt=?,error=?
+      WHERE id=? AND status IN ('queued','running') RETURNING id,service,action,status`)
+      .get(state, now(), error ?? null, id);
+    if (row && state !== "queued" && state !== "running") this.reportJob(row as unknown as McpAdminJobCompletion);
     this.options.db.prepare(`DELETE FROM managed_mcp_jobs WHERE status NOT IN ('queued','running')
       AND id NOT IN (SELECT id FROM managed_mcp_jobs ORDER BY rowid DESC LIMIT 128)`).run();
+  }
+
+  private reportJob(job: McpAdminJobCompletion): void {
+    try { void Promise.resolve(this.options.onJobCompleted?.(job)).catch(() => { log.warn("托管 MCP 任务完成通知失败"); }); }
+    catch { log.warn("托管 MCP 任务完成通知失败"); }
   }
 
   private save(service: Service): void {
@@ -191,7 +220,7 @@ export class McpAdmin {
     return Object.fromEntries(await Promise.all(Object.entries(refs).map(async ([name, ref]) => [name, await this.vault.resolve(ref)])));
   }
 
-  private async config(service: Service): Promise<ManagedMcpRunConfig> {
+  private async config(service: Service, dockerRunKey?: string): Promise<ManagedMcpRunConfig> {
     const { manifest } = service;
     const base = { name: manifest.id, allowTools: manifest.allowedTools, protocolVersion: "2025-11-25" as const };
     if (manifest.kind === "remote") {
@@ -201,18 +230,65 @@ export class McpAdmin {
     }
     if (!service.deployment) throw new Error("找不到本地 MCP 部署");
     const directory = this.deploymentPath(manifest, service.deployment);
-    const launch = await (this.options.launch ?? managedLocalLaunch)(manifest, directory);
     const secrets = await this.credentials(manifest.secretEnv);
+    if (manifest.kind === "docker") {
+      if (!dockerRunKey) throw new Error("找不到 Docker 运行标识");
+      const launch = await createManagedDocker(manifest, directory, dockerRunKey, { ...manifest.env, ...secrets },
+        this.abort.signal, this.options.dockerExecute);
+      return { ...base, ...launch, transport: "stdio", isolatedStdio: { directory, env: managedDockerClientEnv(directory) }, credentials: Object.values(secrets) };
+    }
+    const launch = await (this.options.launch ?? managedLocalLaunch)(manifest, directory);
     return { ...base, ...launch, transport: "stdio",
       isolatedStdio: { directory, env: managedRuntimeEnv(directory) }, env: { ...manifest.env, ...secrets }, credentials: Object.values(secrets) };
   }
 
   private async mount(service: Service): Promise<void> {
-    const config = await this.config(service);
-    this.abort.signal.throwIfAborted();
-    await this.options.manager.upsertManaged(config, ctx => !!(ctx.isPrivate && ctx.requesterId && ctx.personaId && ctx.roomId
-      && this.options.isOwner(ctx.accountId, ctx.requesterId)
-      && service.manifest.allowedAgents.includes(ctx.personaId) && service.manifest.allowedRooms.includes(ctx.roomId)));
+    const id = service.manifest.id;
+    const dockerRunKey = service.manifest.kind === "docker" ? randomUUID().replaceAll("-", "") : undefined;
+    if (dockerRunKey) {
+      await this.cleanupDockerRuns(id);
+      const count = this.options.db.prepare("SELECT count(*) AS total FROM managed_mcp_docker_runs").get() as { total: number };
+      if (count.total >= 128) throw new Error("Docker 运行记录已达上限，需要先清理遗留容器");
+      this.options.db.prepare("INSERT INTO managed_mcp_docker_runs VALUES (?,?)").run(dockerRunKey, id);
+    }
+    try {
+      const config = await this.config(service, dockerRunKey);
+      this.abort.signal.throwIfAborted();
+      await this.options.manager.upsertManaged(config, ctx => !!(ctx.isPrivate && ctx.requesterId && ctx.personaId && ctx.roomId
+        && this.options.isOwner(ctx.accountId, ctx.requesterId)
+        && service.manifest.allowedAgents.includes(ctx.personaId) && service.manifest.allowedRooms.includes(ctx.roomId)));
+    } catch (error) {
+      if (dockerRunKey) await this.cleanupDockerRuns(id, dockerRunKey);
+      throw error;
+    }
+    if (dockerRunKey) this.liveDockerRuns.set(id, dockerRunKey);
+    else this.liveDockerRuns.delete(id);
+    await this.cleanupDockerRuns(id);
+  }
+
+  private async deactivate(id: string): Promise<void> {
+    await this.options.manager.removeManaged(id);
+    this.liveDockerRuns.delete(id);
+    await this.cleanupDockerRuns(id);
+  }
+
+  private async cleanupDockerRuns(service?: string, onlyRunKey?: string): Promise<void> {
+    const statement = this.options.db.prepare(service === undefined
+      ? "SELECT * FROM managed_mcp_docker_runs" : "SELECT * FROM managed_mcp_docker_runs WHERE service=?");
+    const rows = (service === undefined ? statement.all() : statement.all(service)) as DockerRunRow[];
+    if (!rows.length) return;
+    let checkedDirectory = false;
+    for (const row of rows) {
+      if ((onlyRunKey && row.run_key !== onlyRunKey) || this.liveDockerRuns.get(row.service) === row.run_key) continue;
+      try {
+        if (!checkedDirectory) { await fs.mkdir(this.directory, { recursive: true, mode: 0o700 }); checkedDirectory = true; }
+        await removeManagedDocker(row.run_key, this.directory, this.options.dockerExecute);
+        this.options.db.prepare("DELETE FROM managed_mcp_docker_runs WHERE run_key=?").run(row.run_key);
+      } catch (error) {
+        log.warn("无法清理已记录的托管 MCP 容器");
+        if (error instanceof DockerExecutionError && ["missing", "daemon", "timeout"].includes(error.reason)) break;
+      }
+    }
   }
 
   private async perform(action: JobAction, id: string, manifest?: ManagedMcpManifest): Promise<void> {
@@ -222,8 +298,10 @@ export class McpAdmin {
       await this.credentials(manifest.kind === "remote" ? manifest.secretHeaders : manifest.secretEnv);
       const deployment = manifest.kind === "remote" ? null : randomUUID();
       try {
-        if (manifest.kind !== "remote" && deployment) {
-          await (this.options.deploy ?? deployManagedLocal)(manifest, this.deploymentPath(manifest, deployment), this.abort.signal);
+        if (deployment) {
+          const directory = this.deploymentPath(manifest, deployment);
+          if (manifest.kind === "docker") await deployManagedDocker(manifest, directory, this.abort.signal, this.options.dockerExecute);
+          else if (manifest.kind !== "remote") await (this.options.deploy ?? deployManagedLocal)(manifest, directory, this.abort.signal);
         }
         const current = { manifest, deployment, enabled: previous?.enabled ?? true, updatedAt: now() };
         await this.replace(previous, current);
@@ -236,11 +314,11 @@ export class McpAdmin {
       if (!previous) throw new Error("服务不存在");
       if (action === "uninstall") {
         this.options.db.prepare("DELETE FROM managed_mcp_services WHERE id=?").run(id);
-        await this.options.manager.removeManaged(id);
+        await this.deactivate(id);
         await this.cleanupDeployment(previous.manifest, previous.deployment);
       } else if (action === "disable") {
         this.save({ ...previous, enabled: false, updatedAt: now() });
-        await this.options.manager.removeManaged(id);
+        await this.deactivate(id);
       } else {
         await this.replace(previous, { ...previous, enabled: true, updatedAt: now() });
       }
@@ -256,8 +334,8 @@ export class McpAdmin {
     } catch (error) {
       if (current.enabled) {
         if (previous?.enabled && !this.abort.signal.aborted) {
-          await this.mount(previous).catch(() => this.options.manager.removeManaged(current.manifest.id));
-        } else await this.options.manager.removeManaged(current.manifest.id);
+          await this.mount(previous).catch(() => this.deactivate(current.manifest.id));
+        } else await this.deactivate(current.manifest.id);
       }
       throw error;
     }
@@ -301,7 +379,13 @@ function registryListing(input: unknown): RegistryListing | undefined {
   const remotes: RegistryListing["remotes"] = [];
   for (const value of Array.isArray(server.packages) ? server.packages.slice(0, 8) : []) {
     const item = asObject(value);
-    if (!item || typeof item.identifier !== "string" || typeof item.version !== "string") continue;
+    if (!item || typeof item.identifier !== "string") continue;
+    if (item.registryType === "oci") {
+      const image = dockerImageReference(item.identifier) ? item.identifier : `${item.identifier}:${item.version ?? ""}`;
+      if (dockerImageReference(image)) packages.push({ kind: "docker", image });
+      continue;
+    }
+    if (typeof item.version !== "string") continue;
     const kind = item.registryType === "npm" ? "npm" : item.registryType === "pypi" ? "python" : undefined;
     if (kind) packages.push({ kind, package: item.identifier.slice(0, 150), version: item.version.slice(0, 64) });
   }

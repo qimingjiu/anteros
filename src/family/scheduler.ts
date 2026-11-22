@@ -5,6 +5,9 @@ import { nextOccurrence, type Schedule } from "./schedule.js";
 
 export type JobKind = "task" | "diary" | "alarm" | "todo" | "web" | "notice";
 export type TaskCondition = "task_completed" | "task_failed";
+export type ExternalCondition = "signal" | "mcp_job_completed";
+type NoticeTrigger = { event: TaskCondition; taskId?: string; once: boolean }
+  | { event: ExternalCondition; name?: string; match?: Record<string, string>; once: boolean };
 type JobState = "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
 export interface JobScope { room: string; member: string; source: MessageRecord }
 export interface Job {
@@ -22,7 +25,7 @@ export interface Job {
   destination?: string;
   url?: string;
   date?: string;
-  trigger?: { event: TaskCondition; taskId?: string; once: boolean };
+  trigger?: NoticeTrigger;
   checkpoint?: string;
   result?: string;
   digest?: string;
@@ -40,11 +43,18 @@ export interface JobOutcome {
 }
 
 export interface SchedulerOptions {
-  run: (job: Job, signal: AbortSignal) => Promise<JobOutcome>;
+  run: (job: Job, signal: AbortSignal, lease: TaskLease) => Promise<JobOutcome>;
   notify: (job: Job, result: JobOutcome, key: string) => Promise<void>;
   allowed: (job: Job) => boolean;
   now: () => number;
 }
+
+export interface TaskLease {
+  check(): void;
+  checkpoint(text: string): void;
+}
+
+export class ConflictingFamilyEvent extends Error {}
 
 export class DeskScheduler {
   private timer?: NodeJS.Timeout;
@@ -69,6 +79,11 @@ export class DeskScheduler {
         id TEXT PRIMARY KEY, state TEXT NOT NULL, job TEXT NOT NULL, outcome TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS family_notice_state ON family_notices (state);
+      CREATE TABLE IF NOT EXISTS family_external_events (
+        room TEXT NOT NULL, event TEXT NOT NULL, id TEXT NOT NULL,
+        payload TEXT NOT NULL, received_at TEXT NOT NULL,
+        PRIMARY KEY(room, event, id)
+      );
     `);
   }
 
@@ -103,7 +118,8 @@ export class DeskScheduler {
     if (previous) return this.summary(previous);
     const job: Job = {
       id, room: scope.room, member: scope.member, state: "queued", revision: 1,
-      source: { ...source, segments: [] }, sourceAt: source.sentAt, ...input,
+      source: { ...source, segments: source.segments.filter(segment => segment.type === "text") },
+      sourceAt: source.sentAt, ...input,
     };
     this.save(job);
     return this.summary(job);
@@ -201,16 +217,62 @@ export class DeskScheduler {
     ).all(task.room, task.member);
     for (const row of candidates) {
       const notice = JSON.parse(String(row.body)) as Job;
-      if (!notice.trigger || notice.trigger.event !== event || (notice.trigger.taskId && notice.trigger.taskId !== task.id)
+      const trigger = notice.trigger;
+      if (!trigger || (trigger.event !== "task_completed" && trigger.event !== "task_failed")
+        || trigger.event !== event || (trigger.taskId && trigger.taskId !== task.id)
         || !this.options.allowed(notice)) continue;
       const result = notice.title + "\n任务 " + task.id + (event === "task_completed" ? " 已完成。" : " 执行失败。");
       this.queueNotice(["family", notice.id, task.id, task.revision, event].join(":"), notice, { result });
-      if (notice.trigger.once) {
+      if (trigger.once) {
         notice.state = "completed";
         notice.receipt = "条件已满足，已存入收件箱。";
         this.save(notice);
       }
     }
+  }
+
+  externalEvent(room: string, event: ExternalCondition, id: string, name: string, data: Record<string, string>) {
+    const payload = JSON.stringify([name, Object.entries(data).sort(([a], [b]) => a.localeCompare(b))]);
+    this.db.db.exec("SAVEPOINT family_external_event");
+    let notified = 0;
+    try {
+      const row = this.db.db.prepare("SELECT payload FROM family_external_events WHERE room=? AND event=? AND id=?")
+        .get(room, event, id);
+      if (row) {
+        if (row.payload !== payload) throw new ConflictingFamilyEvent("该事件 ID 已用于不同内容。");
+        this.db.db.exec("RELEASE family_external_event");
+        return { duplicate: true, notified };
+      }
+      this.db.db.prepare("INSERT INTO family_external_events VALUES (?,?,?,?,?)")
+        .run(room, event, id, payload, new Date(this.options.now()).toISOString());
+      const candidates = this.db.db.prepare(
+        "SELECT body FROM family_jobs WHERE room=? AND kind='notice' AND state='queued' ORDER BY rowid",
+      ).all(room);
+      for (const candidate of candidates) {
+        const notice = JSON.parse(String(candidate.body)) as Job;
+        const trigger = notice.trigger;
+        if (!trigger || (trigger.event !== "signal" && trigger.event !== "mcp_job_completed")
+          || trigger.event !== event || (trigger.name && trigger.name !== name)
+          || Object.entries(trigger.match ?? {}).some(([key, value]) => data[key] !== value)
+          || !this.options.allowed(notice)) continue;
+        const eventKey = createHash("sha256").update(id).digest("hex").slice(0, 32);
+        const key = `family:${notice.id}:external:${event}:${eventKey}`;
+        const description = event === "signal" ? `收到事件 ${name}。` : `MCP ${name} 已结束，状态 ${data.status ?? "未知"}。`;
+        this.queueNotice(key, notice, { result: notice.title + "\n" + description });
+        notified++;
+        if (trigger.once) {
+          notice.state = "completed";
+          notice.receipt = "条件已满足，已存入收件箱。";
+          this.save(notice);
+        }
+      }
+      this.db.db.exec("RELEASE family_external_event");
+    } catch (error) {
+      this.db.db.exec("ROLLBACK TO family_external_event; RELEASE family_external_event");
+      throw error;
+    }
+    this.pumpNotice();
+    return { duplicate: false, notified };
   }
 
   private tick(): void {
@@ -244,7 +306,22 @@ export class DeskScheduler {
     const runAt = job.dueAt;
     const key = ["family", job.id, runAt].join(":");
     try {
-      const outcome = await this.options.run(job, signal);
+      const activeJob = () => {
+        signal.throwIfAborted();
+        const row = this.get(job.id);
+        if (!row || row.revision !== job.revision || row.state !== "running" || !this.options.allowed(row)) {
+          throw new Error("后台任务的执行授权已变更。");
+        }
+        return row;
+      };
+      const outcome = await this.options.run(job, signal, {
+        check: () => { activeJob(); },
+        checkpoint: text => {
+          const row = activeJob();
+          row.checkpoint = text;
+          this.save(row);
+        },
+      });
       const current = this.get(job.id);
       if (!current || current.revision !== job.revision || signal.aborted) return;
       if (!this.options.allowed(current)) {

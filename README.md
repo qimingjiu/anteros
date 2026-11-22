@@ -97,8 +97,11 @@ web:
 
 将成员卡放进 `personas/`（格式见 [personas.example](personas.example)），默认成员使用配置里的 `persona`。在任意已绑定私聊说「翻牌子」或「让雾岛纪来」。切换、交接便签以及其他已绑定私聊中的近期原话，会在下一个入口继续生效。群聊使用群里的对话上下文。
 
+在主人私聊用 `/房间` 查看列表和房间 ID，`/房间 创建 书房 | κόραξ、雾岛纪` 创建并进入书房，`/房间 进入 客厅` 回到客厅。用 `/房间 成员 κόραξ、雾岛纪` 修改当前自建房间的成员。QQ、Discord 和 Telegram 共用当前房间，各房间独立保存接话成员、交接便签、历史、笔记和文件授权。已有家庭历史归入客厅。工作台和 IDE 可以单独浏览房间。
+
 - 原有的递牌子、信件、拆信、串门和成员日记继续使用同一份成员名册。
 - 每个成员有自己的笔记、文件版本和工作台。可以归档当前附件、保留有来源的笔记、明确分享文件，或者收纳网址后按名称、类别和关键词找回。
+- 可以问「找一下我们之前聊的开源项目」。历史召回先匹配原短语，再按词语相关性排序，返回当前房间对应的原话、署名、平台和时间。
 - 「让雾岛纪在后台整理这份提纲」可以创建成员任务。暂停、继续、取消、写检查点和交接都从主人私聊发起。文字产物进入成员工作台，指定了跨端目的地时进入发送队列。
 - 可以设一次性或重复闹钟、待办提醒、每日署名日记、网页变化监测，以及任务完成或失败通知。日记保留可见原话，网页通过安忒洛斯已有的网页阅读器读取。
 - 在绑定私聊说「换模型」，菜单对当前成员生效，选择跨端和重启保留。群聊及其记忆摘要继续使用安忒洛斯的全局模型。
@@ -109,15 +112,49 @@ const { installToolboxDock } = await import(new URL("/ide-toolbox.js", panelURL)
 const dock = installToolboxDock({ gatewayURL: panelURL, getToken });
 ```
 
+#### 成员模型接替和后台工具
+
+下面使用成员卡的稳定 ID `kirishima`。模型档位名指 `model.profiles` 的 `name` 或模型目录中的完整档位名。配置后，选中的模型受限流、超时或服务故障影响时，可在同一轮用名单里的备用档位接替。接替成功的档位和失败档位的冷却都会记录在数据库里。可给档位填 `capabilities: { tools: false, vision: false }`，以便在需要工具或图片的本轮跳过该档位。
+
+```yaml
+family:
+  owner_id: "10001"
+  model_failover:
+    kirishima:
+      primary_profile: main
+      fallback_profiles: [backup]
+      max_attempts: 3
+      attempt_timeout_ms: 30000
+      total_timeout_ms: 60000
+      cooldown_ms: 60000
+  background_mcp_tools:
+    - mcp__project__search
+  signal_token_env: ANTEROS_SIGNAL_TOKEN
+```
+
+后台任务可在上面的成员和房间范围内使用已启用的搜索、网页阅读、天气、文件阅读以及列出的 MCP 工具。任务的检查点和工具回执持久化。暂停、切换成员或重启后，已经返回的相同调用可复用回执；未确认的外部调用保留状态。
+
+#### 外部事件通知
+
+在要收通知的房间说「每次收到 build.done，状态是 ready，就发到 tg 提醒我」。外部服务可以向 `POST /api/family/signals` 发 JSON。令牌从 `family.signal_token_env` 读取，省略该设置时使用面板令牌。请求用 `Authorization: Bearer …`，默认投给客厅，可填从 `/房间` 取得的房间 ID。重试时发送相同的事件 ID 和内容。
+
+```json
+{"id":"build-27","name":"build.done","room":"family","data":{"status":"ready"}}
+```
+
+也可以在房间里说「MCP project 安装有结果时通知我」。匹配到的通知先写进该成员的收件箱，再送往原私聊或主人指定的三端目的地。
+
 ### 安忒洛斯已有功能
 
 QQ 的 @、引用和别名唤醒、戳一戳、群内自然接话、断线补取、搜群消息、群记忆修订和 Markdown 日报仍使用原来的实现。Discord 保留相同聊天工具及原有点歌、语音消息、通话能力。网页搜索、网页阅读、天气、文档、Notion、邮箱、飞书和 MiniMax 仍按各自配置启用。MCP 工具继续由安忒洛斯统一连接和执行。
 
 ### 管理 MCP
 
-启用 `tools.mcp.enabled` 和 `tools.mcp.managed_enabled`，设置 `web.token_env` 后打开 `/mcp`。输入面板令牌可以搜索 Registry、提交固定版本的 npm 或 Python 服务，或登记公开 HTTPS 的 Streamable HTTP 服务。页面显示安装和连接状态，可以更新、启停或卸载。填写的凭据加密保存，服务清单引用凭据名。
+启用 `tools.mcp.enabled` 和 `tools.mcp.managed_enabled`，设置 `web.token_env` 后打开 `/mcp`。输入面板令牌可以搜索 Registry、提交固定版本的 npm、Python 或 Docker 服务，或登记公开 HTTPS 的 Streamable HTTP 服务。页面显示安装和连接状态，可以更新、启停或卸载。填写的凭据加密保存，服务清单引用凭据名。
 
-托管服务声明允许的成员 ID 和房间。三个已绑定私聊共用逻辑房间 `family`，例如给雾岛纪开放某个服务时，可将其成员卡 ID 写进 `allowedAgents`、把 `family` 写进 `allowedRooms`。原有 YAML 中声明的 MCP 服务器继续使用原来的配置和权限。
+托管服务声明允许的成员 ID 和房间。客厅用 `family`，自建房间用 `/房间` 显示的 ID。例如给雾岛纪在客厅开放某个服务时，可将其成员卡 ID 写进 `allowedAgents`、把 `family` 写进 `allowedRooms`。原有 YAML 中声明的 MCP 服务器继续使用原来的配置和权限。
+
+Docker 方式要求运行安忒洛斯的用户能使用本机 Linux 容器引擎，镜像通过 stdio 提供 MCP。清单使用 `kind: "docker"` 和带明确版本标签或 SHA-256 digest 的 `image`。安忒洛斯拉取后固定镜像，启动时沿用固定版本。更新后的服务通过 MCP 握手再替换旧实例。
 
 ## 更新已有安装
 

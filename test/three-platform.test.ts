@@ -7,6 +7,8 @@ import { Agent } from "../src/agent/index.js";
 import { loadConfig } from "../src/config.js";
 import { Database } from "../src/db/index.js";
 import { PrivateTranscript } from "../src/family/transcript.js";
+import { FamilyRooms } from "../src/family/rooms.js";
+import type { PersonaSwitcher } from "../src/agent/persona-switch.js";
 import { Gateway, gatewayOptionsFromConfig } from "../src/gateway/index.js";
 import type { LLMClient } from "../src/llm/index.js";
 import { ModelSwitcher } from "../src/llm/switcher.js";
@@ -67,9 +69,24 @@ test("one Anteros process shares one private family among three gateways and iso
     const provider = new TestProvider(cfg.gateway.provider, String(500 + index));
     return { cfg, provider, gateway: new Gateway(db, provider, gatewayOptionsFromConfig(cfg, index === 0)) };
   });
-  const transcript = new PrivateTranscript(db, accounts.map(({ cfg, provider }) => ({
+  const peers = accounts.map(({ cfg, provider }) => ({
     accountId: cfg.gateway.accountId, ownerIds: cfg.tools.ownerIds!, botId: () => provider.health().selfId,
-  })));
+  }));
+  let shared: ReturnType<Agent["familyWorld"]> | undefined;
+  const rooms = new FamilyRooms(db, { homeId: "home", catalog: () => shared?.personas.list() ?? [],
+    isOwner: source => peers.some(peer => peer.accountId === source.accountId && peer.ownerIds.includes(source.senderId)),
+  });
+  const roomSwitchers = new Map<string, PersonaSwitcher>();
+  const roomPersonas = (roomId: string) => {
+    if (roomId === rooms.homeId) return shared?.personas;
+    if (!shared || !rooms.get(roomId)?.memberIds.length) return undefined;
+    const existing = roomSwitchers.get(roomId);
+    if (existing) return existing;
+    const value = shared.personas.forRoom(() => rooms.get(roomId)?.memberIds ?? [], rooms.personaState(roomId));
+    roomSwitchers.set(roomId, value);
+    return value;
+  };
+  const transcript = new PrivateTranscript(db, peers, { rooms });
   const prompts: string[] = [];
   const llm: LLMClient = { async chat(messages) {
     const prompt = messages.map(message => typeof message.content === "string" ? message.content : "").join("\n");
@@ -77,7 +94,6 @@ test("one Anteros process shares one private family among three gateways and iso
     return { content: "已收到", toolCalls: [], finishReason: "stop" };
   } };
   const mcp = new McpManager(config.tools.mcp);
-  let shared: ReturnType<Agent["familyWorld"]> | undefined;
   let chain = Promise.resolve();
   const serial = (fn: () => Promise<void>) => {
     const job = chain.then(fn);
@@ -88,8 +104,9 @@ test("one Anteros process shares one private family among three gateways and iso
     for (const [index, account] of accounts.entries()) {
       const agent = new Agent({ db, ...account, llm, memory: null, search: null, reader: null, mcp,
         timezone: "Asia/Shanghai", familyWorld: shared, linkedTranscript: transcript,
-        runFamilyTurn: serial, personaDirectory: directory, legacyWorldAccess: index === 0 });
+        runFamilyTurn: serial, personaDirectory: directory, legacyWorldAccess: index === 0, rooms, roomPersonas });
       shared ??= agent.familyWorld();
+      account.gateway.setFamilyRecorder((message, room, turn) => rooms.recordMessage(message.eventKey, room, turn));
       agent.attach();
       account.gateway.start();
     }
@@ -125,6 +142,25 @@ test("one Anteros process shares one private family among three gateways and iso
     assert.doesNotMatch(groupPrompt ?? "", /FAMILY_MEMBER_PROMPT|PRIVATE_SOURCE_ONLY/);
     assert.equal(db.getMessageById("private_123456789", "1", "telegram")?.text_content, "TELEGRAM_CONTINUITY");
     assert.equal(db.getMessageById("private_10001", "1", "default")?.text_content, "PRIVATE_SOURCE_ONLY 橘子");
+
+    inject(2, "20", "/房间 创建 书房 | 乌鸦");
+    await eventually(() => rooms.current().name === "书房");
+    inject(0, "21", "STUDY_PRIVATE_ONLY 书房芒果");
+    await eventually(() => prompts.some(prompt => prompt.includes("STUDY_PRIVATE_ONLY")));
+    inject(2, "22", "STUDY_TELEGRAM_NEXT");
+    await eventually(() => prompts.some(prompt => prompt.includes("STUDY_TELEGRAM_NEXT")));
+    const studyPrompt = prompts.find(prompt => prompt.includes("]: STUDY_TELEGRAM_NEXT")) ?? "";
+    assert.match(studyPrompt, /PUBLIC_PERSONA/);
+    assert.match(studyPrompt, /STUDY_PRIVATE_ONLY/);
+    assert.doesNotMatch(studyPrompt, /FAMILY_MEMBER_PROMPT|PRIVATE_SOURCE_ONLY/);
+    inject(1, "23", "/房间 进入 客厅");
+    await eventually(() => rooms.current().id === "home");
+    inject(2, "24", "BACK_IN_HOME");
+    await eventually(() => prompts.some(prompt => prompt.includes("BACK_IN_HOME")));
+    const homePrompt = prompts.find(prompt => prompt.includes("]: BACK_IN_HOME")) ?? "";
+    assert.match(homePrompt, /FAMILY_MEMBER_PROMPT/);
+    assert.match(homePrompt, /PRIVATE_SOURCE_ONLY/);
+    assert.doesNotMatch(homePrompt, /STUDY_PRIVATE_ONLY|STUDY_TELEGRAM_NEXT/);
   } finally {
     await Promise.all(accounts.map(account => account.gateway.stop()));
     db.close();
